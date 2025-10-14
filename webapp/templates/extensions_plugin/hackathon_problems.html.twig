@@ -1,0 +1,79 @@
+{% extends 'jury/base.html.twig' %}
+{% import 'jury/jury_macros.twig' as macros %}
+
+{% block title %}Problems - {{ contest.name }}{% endblock %}
+
+{% block extrahead %}
+    {{ parent() }}
+    {{ macros.table_extrahead() }}
+{% endblock %}
+
+{% block content %}
+<ul class="nav nav-tabs mb-4">
+    <li class="nav-item">
+        <a class="nav-link" href="{{ path('jury_hackathon_display', {'contestId': contest.cid}) }}">Overview</a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link active" aria-current="page" href="#">Problems</a>
+    </li>
+    <li class="nav-item">
+        {# Phases removed - feature disabled #}
+    </li>
+</ul>
+<div class="container mt-4">
+    <h1>Problems for <b>{{ contest.name }}</b></h1>
+    <a href="{{ path('jury_hackathon') }}" class="btn btn-secondary mb-3">&larr; Back to Hackathon List</a>
+
+
+    <div class="card mb-4">
+        <div class="card-header">Quick Add Problem</div>
+        <div class="card-body">
+            <form method="post" action="{{ path('jury_hackathon_quickadd_problem', {'contestId': contest.cid}) }}" enctype="multipart/form-data">
+                <div class="mb-2">
+                    <label for="quickadd-shortname" class="form-label">Short name</label>
+                    <input type="text" class="form-control" id="quickadd-shortname" name="shortname" placeholder="e.g. P1">
+                </div>
+                <div class="mb-2">
+                    <label for="quickadd-name" class="form-label">Name</label>
+                    <input type="text" class="form-control" id="quickadd-name" name="name" placeholder="e.g. Hello World">
+                </div>
+                <button type="submit" class="btn btn-primary">Quick Add Problem</button>
+            </form>
+        </div>
+    </div>
+
+    <h3>Problem List</h3>
+    {% if problems is empty %}
+        <div class="alert alert-secondary">No problems added yet.</div>
+    {% else %}
+        {% set table_fields = {
+            'shortname': {'title': 'Short name', 'sort': true},
+            'name': {'title': 'Name', 'sort': true},
+            'timelimit': {'title': 'Timelimit', 'sort': true},
+            'memlimit': {'title': 'Memory limit', 'sort': true},
+        } %}
+        {% set problems_table = [] %}
+        {% for cp in problems %}
+            {% set row = {
+                'data': {
+                    'shortname': {'value': cp.shortname},
+                    'name': {'value': cp.problem.name},
+                    'timelimit': {'value': cp.problem.timelimit ~ ' s'},
+                    'memlimit': {'value': (cp.problem.memlimit is not null ? (cp.problem.memlimit // 1024) ~ ' MB' : '256 MB')},
+                },
+                'actions': [
+                    {
+                        'icon': 'edit',
+                        'title': 'Edit Display Data',
+                        'link': path('jury_hackathon_edit_problem_display', {'contestId': contest.cid, 'problemId': cp.problem.probid})
+                    }
+                ],
+                'link': null,
+                'cssclass': ''
+            } %}
+            {% set problems_table = problems_table | merge([row]) %}
+        {% endfor %}
+        {{ macros.table(problems_table, table_fields) }}
+    {% endif %}
+</div>
+{% endblock %}

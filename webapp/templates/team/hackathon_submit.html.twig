@@ -1,0 +1,431 @@
+{% extends "team/base.html.twig" %}
+
+{% block title %}Submit Solution - {{ parent() }}{% endblock %}
+
+{% block extrahead %}
+    {{ parent() }}
+    <style>
+        .hackathon-submit {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        
+        .form-section {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            border-left: 4px solid #007bff;
+        }
+        
+        .section-title {
+            color: #007bff;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+        }
+        
+        .section-title i {
+            margin-right: 0.5rem;
+        }
+        
+        .file-upload-zone {
+            border: 2px dashed #dee2e6;
+            border-radius: 8px;
+            padding: 2rem;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+        
+        .file-upload-zone:hover {
+            border-color: #007bff;
+            background-color: #f8f9fa;
+        }
+        
+        .deliverable-types .form-check {
+            background: white;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            padding: 0.75rem;
+            margin-bottom: 0.5rem;
+            transition: all 0.2s ease;
+        }
+        
+        .deliverable-types .form-check:hover {
+            border-color: #007bff;
+            box-shadow: 0 2px 4px rgba(0,123,255,0.1);
+        }
+        
+        .deliverable-types .form-check-input:checked ~ .form-check-label {
+            color: #007bff;
+            font-weight: 500;
+        }
+        
+        .submission-method .form-check {
+            background: white;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            padding: 1rem;
+            margin-bottom: 0.75rem;
+            transition: all 0.2s ease;
+        }
+        
+        .submission-method .form-check:hover {
+            border-color: #007bff;
+            box-shadow: 0 2px 4px rgba(0,123,255,0.1);
+        }
+        
+        .submission-method .form-check-input:checked ~ .form-check-label {
+            color: #007bff;
+            font-weight: 600;
+        }
+        
+        .conditional-section {
+            display: none;
+            opacity: 0;
+            transition: all 0.3s ease;
+        }
+        
+        .conditional-section.show {
+            display: block;
+            opacity: 1;
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+<div class="hackathon-submit">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>
+            <i class="fas fa-upload text-primary me-2"></i>
+            Submit Your Solution
+        </h1>
+        <a href="{{ path('team_problems') }}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left me-1"></i> Back to Problems
+        </a>
+    </div>
+
+    {% if problem %}
+        <div class="alert alert-info">
+            <i class="fas fa-info-circle me-2"></i>
+            Submitting solution for: <strong>{{ problem.name }}</strong>
+        </div>
+    {% endif %}
+
+    {{ form_start(form, {'attr': {'enctype': 'multipart/form-data'}}) }}
+    
+    {# Submission Method Selection #}
+    <div class="form-section">
+        <h3 class="section-title">
+            <i class="fas fa-route"></i>
+            Submission Method
+        </h3>
+        
+        <div class="submission-method">
+            {{ form_widget(form.submission_method) }}
+        </div>
+        {{ form_help(form.submission_method) }}
+        {{ form_errors(form.submission_method) }}
+    </div>
+    
+    {# Problem and Language Selection #}
+    <div class="form-section">
+        <h3 class="section-title">
+            <i class="fas fa-cog"></i>
+            Basic Configuration
+        </h3>
+        
+        <div class="row">
+            <div class="col-md-6">
+                {{ form_row(form.problem) }}
+            </div>
+            <div class="col-md-6">
+                {# Language selection - Commented out for hackathons #}
+                {# {{ form_row(form.language) }} #}
+            </div>
+        </div>
+    </div>
+
+    {# Source Code Upload #}
+    <div class="form-section conditional-section" id="files-section">
+        <h3 class="section-title">
+            <i class="fas fa-code"></i>
+            Source Code
+        </h3>
+        
+        <div class="file-upload-zone">
+            {{ form_widget(form.code, {'attr': {'class': 'form-control'}}) }}
+            {{ form_help(form.code) }}
+            <div class="mt-2 text-muted">
+                <i class="fas fa-info-circle me-1"></i>
+                Upload your source code files for automated testing
+            </div>
+        </div>
+        {{ form_errors(form.code) }}
+    </div>
+
+    {# GitHub Repository URL #}
+    <div class="form-section conditional-section" id="github-section">
+        <h3 class="section-title">
+            <i class="fab fa-github"></i>
+            GitHub Repository
+        </h3>
+        
+        {{ form_row(form.github_url) }}
+        <div class="mt-2">
+            <small class="text-muted">
+                <i class="fas fa-info-circle me-1"></i>
+                Make sure your repository is public or accessible to judges. Include a comprehensive README.md with setup instructions.
+            </small>
+        </div>
+    </div>
+
+    {# Live Demo URL #}
+    <div class="form-section conditional-section" id="demo-section">
+        <h3 class="section-title">
+            <i class="fas fa-external-link-alt"></i>
+            Live Demo
+        </h3>
+        
+        {{ form_row(form.demo_url) }}
+        {{ form_row(form.video_url) }}
+        <div class="mt-2">
+            <small class="text-muted">
+                <i class="fas fa-info-circle me-1"></i>
+                Provide a working demo that judges can test. Include login credentials if needed in the description below.
+            </small>
+        </div>
+    </div>
+
+    {# Deliverable Types #}
+    <div class="form-section">
+        <h3 class="section-title">
+            <i class="fas fa-cube"></i>
+            Deliverable Types
+        </h3>
+        
+        <div class="deliverable-types">
+            {{ form_widget(form.deliverable_types) }}
+        </div>
+        {{ form_help(form.deliverable_types) }}
+        {{ form_errors(form.deliverable_types) }}
+    </div>
+
+    {# Deliverable Files Upload #}
+    <div class="form-section conditional-section" id="deliverable-files-section">
+        <h3 class="section-title">
+            <i class="fas fa-archive"></i>
+            Deliverable Files
+        </h3>
+        
+        <div class="file-upload-zone">
+            {{ form_widget(form.deliverable_files, {'attr': {'class': 'form-control', 'multiple': 'multiple'}}) }}
+            {{ form_help(form.deliverable_files) }}
+            <div class="mt-2 text-muted">
+                <i class="fas fa-cloud-upload-alt fa-2x mb-2"></i><br>
+                Upload your project deliverables (ZIP files, documentation, etc.)
+            </div>
+        </div>
+        {{ form_errors(form.deliverable_files) }}
+    </div>
+
+    {# Description and Instructions #}
+    <div class="form-section">
+        <h3 class="section-title">
+            <i class="fas fa-file-alt"></i>
+            Documentation
+        </h3>
+        
+        <div class="row">
+            <div class="col-md-6">
+                {{ form_row(form.description) }}
+            </div>
+            <div class="col-md-6">
+                {{ form_row(form.deployment_instructions) }}
+            </div>
+        </div>
+    </div>
+
+    {# Submit Buttons #}
+    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+        <a href="{{ path('team_index') }}" class="btn btn-outline-secondary me-md-2">
+            <i class="fas fa-times me-1"></i> Cancel
+        </a>
+        <button type="submit" class="btn btn-success btn-lg">
+            <i class="fas fa-upload me-1"></i> Submit Solution
+        </button>
+    </div>
+
+    {{ form_end(form) }}
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Submission method handling
+    const submissionMethodInputs = document.querySelectorAll('input[name="hackathon_submit[submission_method]"]');
+    const sectionsMap = {
+        'files-section': ['files', 'files_github', 'files_demo', 'complete'],
+        'github-section': ['github', 'files_github', 'github_demo', 'complete'],
+        'demo-section': ['demo', 'files_demo', 'github_demo', 'complete'],
+        'deliverable-files-section': ['files', 'files_github', 'files_demo', 'complete']
+    };
+    
+    function updateVisibleSections() {
+        const selectedMethod = document.querySelector('input[name="hackathon_submit[submission_method]"]:checked')?.value || 'files';
+        
+        // Hide all conditional sections first
+        document.querySelectorAll('.conditional-section').forEach(section => {
+            section.classList.remove('show');
+        });
+        
+        // Show relevant sections
+        Object.entries(sectionsMap).forEach(([sectionId, methods]) => {
+            const section = document.getElementById(sectionId);
+            if (section && methods.includes(selectedMethod)) {
+                setTimeout(() => section.classList.add('show'), 100);
+            }
+        });
+        
+        // Update field requirements
+        updateFieldRequirements(selectedMethod);
+    }
+    
+    function updateFieldRequirements(method) {
+        // Reset all requirements
+        const codeInput = document.querySelector('input[name="hackathon_submit[code][]"]');
+        const githubInput = document.querySelector('input[name="hackathon_submit[github_url]"]');
+        const demoInput = document.querySelector('input[name="hackathon_submit[demo_url]"]');
+        
+        // Remove previous required attributes
+        [codeInput, githubInput, demoInput].forEach(input => {
+            if (input) input.removeAttribute('required');
+        });
+        
+        // Set requirements based on method
+        switch(method) {
+            case 'files':
+                if (codeInput) codeInput.setAttribute('required', 'required');
+                break;
+            case 'github':
+                if (githubInput) githubInput.setAttribute('required', 'required');
+                break;
+            case 'demo':
+                if (demoInput) demoInput.setAttribute('required', 'required');
+                break;
+            case 'files_github':
+                if (codeInput) codeInput.setAttribute('required', 'required');
+                if (githubInput) githubInput.setAttribute('required', 'required');
+                break;
+            case 'files_demo':
+                if (codeInput) codeInput.setAttribute('required', 'required');
+                if (demoInput) demoInput.setAttribute('required', 'required');
+                break;
+            case 'github_demo':
+                if (githubInput) githubInput.setAttribute('required', 'required');
+                if (demoInput) demoInput.setAttribute('required', 'required');
+                break;
+            case 'complete':
+                if (codeInput) codeInput.setAttribute('required', 'required');
+                if (githubInput) githubInput.setAttribute('required', 'required');
+                if (demoInput) demoInput.setAttribute('required', 'required');
+                break;
+        }
+    }
+    
+    // Initialize on page load
+    updateVisibleSections();
+    
+    // Handle submission method changes
+    submissionMethodInputs.forEach(input => {
+        input.addEventListener('change', updateVisibleSections);
+    });
+
+    // Add file count display for multiple file uploads
+    const fileInputs = document.querySelectorAll('input[type="file"][multiple]');
+    fileInputs.forEach(input => {
+        input.addEventListener('change', function() {
+            const count = this.files.length;
+            const parent = this.closest('.file-upload-zone');
+            let counter = parent.querySelector('.file-counter');
+            
+            if (!counter) {
+                counter = document.createElement('div');
+                counter.className = 'file-counter mt-2 text-primary';
+                parent.appendChild(counter);
+            }
+            
+            if (count > 0) {
+                counter.innerHTML = `<i class="fas fa-check-circle me-1"></i>${count} file${count !== 1 ? 's' : ''} selected`;
+            } else {
+                counter.innerHTML = '';
+            }
+        });
+    });
+    
+    // Enhanced form validation
+    const form = document.querySelector('form');
+    form.addEventListener('submit', function(e) {
+        const selectedMethod = document.querySelector('input[name="hackathon_submit[submission_method]"]:checked')?.value;
+        const codeFiles = document.querySelector('input[name="hackathon_submit[code][]"]');
+        const deliverableFiles = document.querySelector('input[name="hackathon_submit[deliverable_files][]"]');
+        const githubUrl = document.querySelector('input[name="hackathon_submit[github_url]"]');
+        const demoUrl = document.querySelector('input[name="hackathon_submit[demo_url]"]');
+        
+        let isValid = true;
+        let errorMessage = '';
+        
+        switch(selectedMethod) {
+            case 'files':
+                if (!codeFiles.files.length && !deliverableFiles.files.length) {
+                    isValid = false;
+                    errorMessage = 'Please upload source code files or deliverable files.';
+                }
+                break;
+            case 'github':
+                if (!githubUrl.value.trim()) {
+                    isValid = false;
+                    errorMessage = 'Please provide a GitHub repository URL.';
+                }
+                break;
+            case 'demo':
+                if (!demoUrl.value.trim()) {
+                    isValid = false;
+                    errorMessage = 'Please provide a live demo URL.';
+                }
+                break;
+            case 'files_github':
+                if ((!codeFiles.files.length && !deliverableFiles.files.length) || !githubUrl.value.trim()) {
+                    isValid = false;
+                    errorMessage = 'Please provide both files and GitHub repository URL.';
+                }
+                break;
+            case 'files_demo':
+                if ((!codeFiles.files.length && !deliverableFiles.files.length) || !demoUrl.value.trim()) {
+                    isValid = false;
+                    errorMessage = 'Please provide both files and demo URL.';
+                }
+                break;
+            case 'github_demo':
+                if (!githubUrl.value.trim() || !demoUrl.value.trim()) {
+                    isValid = false;
+                    errorMessage = 'Please provide both GitHub repository and demo URLs.';
+                }
+                break;
+            case 'complete':
+                if ((!codeFiles.files.length && !deliverableFiles.files.length) || !githubUrl.value.trim() || !demoUrl.value.trim()) {
+                    isValid = false;
+                    errorMessage = 'Please provide files, GitHub repository, and demo URLs.';
+                }
+                break;
+        }
+        
+        if (!isValid) {
+            e.preventDefault();
+            alert(errorMessage);
+            return false;
+        }
+    });
+});
+</script>
+{% endblock %}

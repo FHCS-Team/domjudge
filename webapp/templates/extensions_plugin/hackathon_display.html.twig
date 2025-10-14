@@ -1,0 +1,281 @@
+{% extends 'jury/base.html.twig' %}
+
+{% block title %}Configure Display Data - {{ contest.name }}{% endblock %}
+
+{% block content %}
+<ul class="nav nav-tabs mb-4">
+    <li class="nav-item">
+        <a class="nav-link active" aria-current="page" href="#">Overview</a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link" href="{{ path('jury_hackathon_problems', {'contestId': contest.cid}) }}">Problems</a>
+    </li>
+    <li class="nav-item">
+        {# Phases removed - feature disabled #}
+    </li>
+    <li class="nav-item">
+        <a class="nav-link" href="{{ path('jury_export_form', {'contestId': contest.cid}) }}">
+            <i class="fas fa-download"></i> Export
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link" href="{{ path('jury_import_form') }}">
+            <i class="fas fa-upload"></i> Import
+        </a>
+    </li>
+</ul>
+<div class="container mt-4">
+    {# Flash messages #}
+    {% for label, messages in app.flashes %}
+        {% for message in messages %}
+            <div class="alert alert-{{ label == 'error' ? 'danger' : label }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        {% endfor %}
+    {% endfor %}
+    
+    <h1>Configure Display Data for <b>{{ contest.name }}</b></h1>
+    
+    <div class="mb-3">
+        <form method="POST" action="{{ path('jury_hackathon_toggle_hackathon_enabled', {'contestId': contest.cid}) }}" style="display: inline;" id="hackathon-toggle-form">
+            <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" id="hackathon-enabled-toggle" {% if contest.hackathonEnabled %}checked{% endif %}>
+                <label class="form-check-label fw-bold" for="hackathon-enabled-toggle">Enable Hackathon</label>
+                <input type="hidden" name="enabled" id="enabled-hidden" value="{{ contest.hackathonEnabled ? '1' : '0' }}">
+            </div>
+        </form>
+        <div class="form-text text-warning"><i class="fas fa-exclamation-triangle"></i> Must enable this so the display data can be displayed</div>
+    </div>
+    
+    <a href="{{ path('jury_hackathon') }}" class="btn btn-secondary mb-3">&larr; Back to Hackathon List</a>
+    <div class="mb-3 d-flex gap-2">
+        <a href="{{ path('jury_hackathon_export_display', {'contestId': contest.cid}) }}" class="btn btn-outline-primary">
+            Export Display Data
+        </a>
+        <form action="{{ path('jury_hackathon_import_display', {'contestId': contest.cid}) }}" method="post" enctype="multipart/form-data" style="display:inline;">
+            <label class="btn btn-outline-success mb-0">
+                Import Display Data
+                <input type="file" name="import_file" accept="application/json" style="display:none;" onchange="this.form.submit()">
+            </label>
+        </form>
+    </div>
+    <div class="row">
+        <div class="col-md-6">
+            {{ form_start(form, {'attr': {'enctype': 'multipart/form-data'}}) }}
+                <div class="mb-3">
+                    {{ form_label(form.title) }}
+                    {{ form_widget(form.title, {'attr': {'class': 'form-control', 'id': 'display-title'}}) }}
+                    {{ form_help(form.title) }}
+                </div>
+                <div class="mb-3">
+                    {{ form_label(form.subtitle) }}
+                    {{ form_widget(form.subtitle, {'attr': {'class': 'form-control', 'id': 'display-subtitle'}}) }}
+                    {{ form_help(form.subtitle) }}
+                </div>
+                <div class="mb-3">
+                    {{ form_label(form.bannerUrl) }}
+                    {{ form_widget(form.bannerUrl, {'attr': {'class': 'form-control', 'id': 'display-bannerUrl'}}) }}
+                    {{ form_help(form.bannerUrl) }}
+                </div>
+                <div class="mb-3">
+                    {{ form_label(form.bannerFile) }}
+                    {{ form_widget(form.bannerFile, {'attr': {'class': 'form-control', 'id': 'display-bannerFile', 'accept': 'image/*'}}) }}
+                    <div class="form-text">Upload a banner image (png, jpg, gif, webp, svg). This will override the URL above if set.</div>
+                    {{ form_errors(form.bannerFile) }}
+                    {{ form_help(form.bannerFile) }}
+                </div>
+                {# Phase configuration control removed - phases disabled in this deployment #}
+                <div class="mb-3">
+                    {{ form_label(form.description) }}
+                    {{ form_widget(form.description, {'id': 'display-description', 'attr': {'class': 'form-control', 'style': 'min-height: 120px;'}}) }}
+                    <div class="form-text">You can use HTML for rich formatting. To embed an image or video, upload it below and paste the provided HTML snippet here.</div>
+                    {{ form_help(form.description) }}
+                </div>
+                {# Previously uploaded media preview removed: media/metadata are stored in dedicated tables and shown elsewhere. #}
+                <div class="mb-3">
+                    {{ form_label(form.mediaFile) }}
+                    {{ form_widget(form.mediaFile, {'attr': {'class': 'form-control', 'accept': 'image/*,video/*'}}) }}
+                    <div class="form-text">Upload an image or video to embed in the description. After saving, you will get a URL and HTML snippet to use.</div>
+                    {{ form_errors(form.mediaFile) }}
+                    {{ form_help(form.mediaFile) }}
+                </div>
+        {% if mediaSnippet %}
+        <div class="alert alert-info mt-3">
+            <b>Media uploaded!</b><br>
+            <div>URL: <code>{{ mediaSnippet|replace({'<img src="':'', '<video src="':'', '" alt="Media">':'', '" controls></video>':''}) }}</code></div>
+            <div>HTML snippet to copy:</div>
+            <textarea class="form-control" rows="2" readonly style="font-family:monospace">{{ mediaSnippet }}</textarea>
+            <div class="form-text">Paste this snippet into the description field above to embed your media.</div>
+        </div>
+        {% endif %}
+                {# Metadata section removed as requested #}
+                <button type="submit" class="btn btn-primary">Save</button>
+            {{ form_end(form) }}
+        </div>
+        <div class="col-md-6">
+            <h4>Live Preview</h4>
+            <div id="display-preview" style="border:1px solid #ccc; padding:0; min-height:200px; background:#fafbfc;">
+                <div id="preview-banner" style="width:100%; max-height:220px; overflow:hidden;"></div>
+                <div style="background:#fff; margin:0 16px 16px 16px; box-shadow:0 2px 8px rgba(0,0,0,0.07); border-radius:8px; padding:32px 24px 24px 24px;">
+                    <div style="display:flex; flex-direction:column; align-items:flex-start; gap:0.5em;">
+                        <h2 id="preview-title" style="margin-bottom:0; font-weight:700;"></h2>
+                        <h5 id="preview-subtitle" style="color:#666; margin-top:0; font-weight:400;"></h5>
+                    </div>
+                    <div id="preview-description" style="margin-top:1.5em;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+    <script src="/js/tinymce_7.1.2/tinymce/js/tinymce/tinymce.min.js"></script>
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        setTimeout(function() {
+            var textarea = document.getElementById('display-description');
+            if (!textarea) {
+                console.warn('No textarea with id=display-description found after 600ms!');
+                // Show a visible error message on the page for easier debugging
+                var err = document.createElement('div');
+                err.style.color = 'red';
+                err.style.fontWeight = 'bold';
+                err.style.margin = '10px 0';
+                err.textContent = 'ERROR: No textarea with id=display-description found after 600ms! TinyMCE cannot initialize.';
+                var form = document.querySelector('form');
+                if (form) form.parentNode.insertBefore(err, form);
+                return;
+            }
+            console.log('Found textarea:', textarea);
+            console.log('Tag name:', textarea.tagName, 'Type:', textarea.type);
+            console.log('Initializing TinyMCE on #display-description');
+            tinymce.init({
+                selector: '#display-description',
+                height: 400,
+                plugins: 'image link code lists table',
+                toolbar: 'undo redo | styles | bold italic underline | alignleft aligncenter alignright alignjustify | bullist numlist outdent indent | link image | code',
+                menubar: false,
+                branding: false,
+                license_key: 'gpl',
+                images_upload_url: '/jury/upload-image-endpoint',
+                automatic_uploads: true,
+                images_upload_handler: null // Use default handler for real upload
+            });
+        }, 600);
+    });
+const initialPreview = {
+    title: {{ displayData.title|json_encode|raw }},
+    subtitle: {{ displayData.subtitle|json_encode|raw }},
+    bannerUrl: {{ displayData.bannerUrl|json_encode|raw }},
+    description: {{ displayData.description|json_encode|raw }}
+};
+
+function updatePreview() {
+    const titleEl = document.getElementById('display-title');
+    const subtitleEl = document.getElementById('display-subtitle');
+    const bannerUrlEl = document.getElementById('display-bannerUrl');
+    const bannerFileInput = document.getElementById('display-bannerFile');
+    const descriptionEl = document.getElementById('display-description');
+    const previewTitle = document.getElementById('preview-title');
+    const previewSubtitle = document.getElementById('preview-subtitle');
+    const bannerDiv = document.getElementById('preview-banner');
+    const previewDescription = document.getElementById('preview-description');
+
+    // Use form field value, or fallback to initial value from backend
+    if (previewTitle) previewTitle.textContent = (titleEl && titleEl.value) ? titleEl.value : (initialPreview.title || '');
+    if (previewSubtitle) previewSubtitle.textContent = (subtitleEl && subtitleEl.value) ? subtitleEl.value : (initialPreview.subtitle || '');
+
+    // Banner logic
+    if (bannerDiv) {
+        if (bannerFileInput && bannerFileInput.files && bannerFileInput.files[0]) {
+            const file = bannerFileInput.files[0];
+            if (file.type.startsWith('image/')) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    bannerDiv.innerHTML = `<img src="${e.target.result}" alt="Banner" style="width:100%; object-fit:cover; max-height:220px;">`;
+                };
+                reader.readAsDataURL(file);
+            } else {
+                bannerDiv.innerHTML = '<div class="text-danger">Invalid image file type.</div>';
+            }
+        } else if ((bannerUrlEl && bannerUrlEl.value) || initialPreview.bannerUrl) {
+            const url = (bannerUrlEl && bannerUrlEl.value) ? bannerUrlEl.value : initialPreview.bannerUrl;
+            if (url) {
+                bannerDiv.innerHTML = `<img src="${url}" alt="Banner" style="width:100%; object-fit:cover; max-height:220px;">`;
+            } else {
+                bannerDiv.innerHTML = '';
+            }
+        } else {
+            bannerDiv.innerHTML = '';
+        }
+    }
+
+    if (previewDescription) {
+        if (descriptionEl && descriptionEl.value) {
+            previewDescription.innerHTML = descriptionEl.value;
+        } else if (initialPreview.description) {
+            previewDescription.innerHTML = initialPreview.description;
+        } else {
+            previewDescription.innerHTML = '';
+        }
+    }
+}
+
+
+function attachPreviewListeners() {
+    ['display-title', 'display-subtitle', 'display-bannerUrl', 'display-bannerFile'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el && !el._previewListenerAttached) {
+            el.addEventListener(id === 'display-bannerFile' ? 'change' : 'input', updatePreview);
+            el._previewListenerAttached = true;
+        }
+    });
+    const descEl = document.getElementById('display-description');
+    if (descEl && !descEl._previewListenerAttached) {
+        descEl.addEventListener('input', function(e) { console.log('description input event'); updatePreview(); });
+        descEl.addEventListener('change', function(e) { console.log('description change event'); updatePreview(); });
+        descEl._previewListenerAttached = true;
+        console.log('Attached preview listeners to description textarea');
+    }
+}
+
+function observeDescriptionField() {
+    const form = document.querySelector('form');
+    if (!form) return;
+    const observer = new MutationObserver((mutations) => {
+        for (const mutation of mutations) {
+            if (mutation.type === 'childList' || mutation.type === 'subtree') {
+                attachPreviewListeners();
+                updatePreview();
+            }
+        }
+    });
+    observer.observe(form, { childList: true, subtree: true });
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+    attachPreviewListeners();
+    observeDescriptionField();
+    updatePreview();
+});
+window.onload = () => {
+    attachPreviewListeners();
+    updatePreview();
+};
+attachPreviewListeners();
+updatePreview();
+
+// Handle hackathon enabled toggle
+document.addEventListener('DOMContentLoaded', function() {
+    const toggle = document.getElementById('hackathon-enabled-toggle');
+    const form = document.getElementById('hackathon-toggle-form');
+    const hiddenInput = document.getElementById('enabled-hidden');
+    
+    if (toggle && form && hiddenInput) {
+        toggle.addEventListener('change', function() {
+            hiddenInput.value = toggle.checked ? '1' : '0';
+            form.submit();
+        });
+    }
+});
+</script>
+{% endblock %}

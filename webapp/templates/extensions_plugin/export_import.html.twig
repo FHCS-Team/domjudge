@@ -1,0 +1,223 @@
+{% extends 'jury/base.html.twig' %}
+
+{% block title %}{% if mode == 'export' %}Export Contest{% else %}Import Contest{% endif %}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    {% if mode == 'export' %}
+        <h1>Export Contest: {{ contest.name }}</h1>
+        <div class="alert alert-info">
+            <h5><i class="fas fa-info-circle"></i> What will be exported:</h5>
+            <ul class="mb-0">
+                <li><strong>Contest settings</strong> - Basic contest configuration and hackathon settings</li>
+                <li><strong>Contest display data</strong> - Custom banners, descriptions, and metadata</li>
+                <li><strong>Problems</strong> - All problems associated with this contest</li>
+                <li><strong>Problem display data</strong> - Rich descriptions and custom metadata</li>
+                <li><strong>Rubrics</strong> - All rubrics for each problem</li>
+                <li><strong>Attachments</strong> - All files and links associated with problems and rubrics</li>
+                <li><strong>File contents</strong> - Actual file data for all attachments</li>
+            </ul>
+        </div>
+
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Export Options</h5>
+                <p class="card-text">
+                    This will create a comprehensive ZIP file containing all contest data, problems, rubrics, and associated files.
+                    The exported file can be imported into another DOMjudge instance with hackathon extensions.
+                </p>
+                
+                <form method="get" action="{{ path('jury_export_contest', {'contestId': contest.cid}) }}">
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" name="include_files" id="include_files" value="1" checked>
+                        <label class="form-check-label" for="include_files">
+                            <strong>Include Files</strong>
+                        </label>
+                        <div class="form-text">
+                            Include banner images, problem attachments, and submission deliverable files in the export.
+                            <br><small class="text-muted">Unchecking this will create a smaller export with only contest data and structure.</small>
+                        </div>
+                    </div>
+                    
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-primary btn-lg">
+                            <i class="fas fa-download"></i> Export Contest
+                        </button>
+                        <a href="{{ path('jury_hackathon_display', {'contestId': contest.cid}) }}" 
+                           class="btn btn-secondary">
+                            <i class="fas fa-arrow-left"></i> Back to Contest
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="mt-4">
+            <h5>Export Structure Preview:</h5>
+            <pre class="bg-light p-3">
+contest_shortname_export.zip
+├── contest.json (main data file)
+└── attachments/
+    ├── problem_1/
+    │   ├── general/ (general problem attachments)
+    │   └── rubric_1/ (rubric-specific attachments)
+    │       └── attachment_file.pdf
+    └── problem_2/
+        └── ...
+</pre>
+        </div>
+
+    {% else %}
+        <h1>Import Contest</h1>
+        <div class="alert alert-warning">
+            <h5><i class="fas fa-exclamation-triangle"></i> Import Requirements:</h5>
+            <ul class="mb-0">
+                <li>Upload a ZIP file exported from DOMjudge with hackathon extensions</li>
+                <li>The file must contain a valid <code>contest.json</code></li>
+                <li>All referenced attachment files must be included in the ZIP</li>
+                <li>Import will create a new contest (existing contests are not overwritten)</li>
+            </ul>
+        </div>
+
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Import Contest Data</h5>
+                
+                <form id="importForm" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <label for="import_file" class="form-label">Select Export File</label>
+                        <input type="file" class="form-control" id="import_file" name="import_file" 
+                               accept=".zip" required>
+                        <div class="form-text">Upload a ZIP file exported from DOMjudge hackathon extensions</div>
+                    </div>
+                    
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-success btn-lg" id="importBtn">
+                            <i class="fas fa-upload"></i> Import Contest
+                        </button>
+                        <a href="{{ path('jury_contests') }}" class="btn btn-secondary">
+                            <i class="fas fa-arrow-left"></i> Back to Contests
+                        </a>
+                    </div>
+                </form>
+
+                <div id="importProgress" class="mt-3" style="display: none;">
+                    <div class="progress">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                             role="progressbar" style="width: 100%">
+                            Importing...
+                        </div>
+                    </div>
+                </div>
+
+                <div id="importResult" class="mt-3" style="display: none;"></div>
+            </div>
+        </div>
+
+        <div class="mt-4">
+            <h5>What gets imported:</h5>
+            <div class="row">
+                <div class="col-md-6">
+                    <ul>
+                        <li>New contest with imported settings</li>
+                        <li>Contest display data (banners, descriptions)</li>
+                        <li>All problems with their configurations</li>
+                    </ul>
+                </div>
+                <div class="col-md-6">
+                    <ul>
+                        <li>Problem display data and metadata</li>
+                        <li>All rubrics for each problem</li>
+                        <li>All attachments with their file contents</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    {% endif %}
+</div>
+
+{% if mode == 'import' %}
+<script>
+document.getElementById('importForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const fileInput = document.getElementById('import_file');
+    const importBtn = document.getElementById('importBtn');
+    const progress = document.getElementById('importProgress');
+    const result = document.getElementById('importResult');
+    
+    if (!fileInput.files[0]) {
+        alert('Please select a file to import');
+        return;
+    }
+    
+    // Show progress
+    importBtn.disabled = true;
+    progress.style.display = 'block';
+    result.style.display = 'none';
+    
+    const formData = new FormData();
+    formData.append('import_file', fileInput.files[0]);
+    
+    fetch('{{ path('jury_import_contest') }}', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        return response.text().then(text => {
+            try {
+                return JSON.parse(text);
+            } catch (e) {
+                console.error('Response was not JSON:', text);
+                throw new Error('Server returned invalid JSON. Check console for details.');
+            }
+        });
+    })
+    .then(data => {
+        progress.style.display = 'none';
+        result.style.display = 'block';
+        
+        if (data.success) {
+            result.innerHTML = `
+                <div class="alert alert-success">
+                    <h5><i class="fas fa-check-circle"></i> Import Successful!</h5>
+                    <p><strong>Contest imported:</strong> Contest ID ${data.contest_id}</p>
+                    <ul>
+                        <li>Problems imported: ${data.problems_imported}</li>
+                        <li>Rubrics imported: ${data.rubrics_imported}</li>
+                        <li>Attachments imported: ${data.attachments_imported}</li>
+                    </ul>
+                    <a href="/jury/contests/${data.contest_id}" class="btn btn-primary">
+                        <i class="fas fa-eye"></i> View Imported Contest
+                    </a>
+                </div>
+            `;
+        } else {
+            result.innerHTML = `
+                <div class="alert alert-danger">
+                    <h5><i class="fas fa-exclamation-circle"></i> Import Failed</h5>
+                    <p>${data.error}</p>
+                </div>
+            `;
+        }
+    })
+    .catch(error => {
+        progress.style.display = 'none';
+        result.style.display = 'block';
+        result.innerHTML = `
+            <div class="alert alert-danger">
+                <h5><i class="fas fa-exclamation-circle"></i> Import Error</h5>
+                <p>An error occurred during import: ${error.message}</p>
+            </div>
+        `;
+    })
+    .finally(() => {
+        importBtn.disabled = false;
+    });
+});
+</script>
+{% endif %}
+{% endblock %}

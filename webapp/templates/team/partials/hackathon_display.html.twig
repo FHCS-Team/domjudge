@@ -1,0 +1,159 @@
+{# Hackathon Display Template for Teams #}
+<div class="hackathon-display">
+    {# Banner Section #}
+    {% if hackathonDisplayData.bannerUrl %}
+        <div class="hackathon-banner mb-4" style="width:100%; max-height:300px; overflow:hidden; border-radius: 8px;">
+            <img src="{{ hackathonDisplayData.bannerUrl }}" alt="Hackathon Banner" style="width:100%; object-fit:cover; max-height:300px;">
+        </div>
+    {% endif %}
+
+    {# Title and Subtitle Section #}
+    <div class="hackathon-header text-center mb-4">
+        {% if hackathonDisplayData.title %}
+            <h1 class="hackathon-title display-4 fw-bold text-primary">{{ hackathonDisplayData.title }}</h1>
+        {% else %}
+            <h1 class="hackathon-title display-4 fw-bold text-primary">{{ contest.name }}</h1>
+        {% endif %}
+        
+        {% if hackathonDisplayData.subtitle %}
+            <h2 class="hackathon-subtitle h4 text-muted mb-3">{{ hackathonDisplayData.subtitle }}</h2>
+        {% endif %}
+
+        <div class="team-welcome mb-3">
+            <span class="badge bg-success fs-6">Welcome Team: {{ team.effectiveName }}</span>
+        </div>
+    </div>
+
+    {# Description Section #}
+    {% if hackathonDisplayData.description %}
+        <div class="hackathon-description mb-4">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Contest Information</h5>
+                    <div class="card-text">
+                        {{ hackathonDisplayData.description|raw }}
+                    </div>
+                </div>
+            </div>
+        </div>
+    {% endif %}
+
+    {# Quick Actions Section #}
+    <div class="hackathon-actions mb-4">
+        <div class="row">
+            <div class="col-md-4 mb-3">
+                <div class="card h-100">
+                    <div class="card-body text-center">
+                        <i class="fas fa-code fa-3x text-primary mb-3"></i>
+                        <h5 class="card-title">Problems</h5>
+                        <p class="card-text">View and solve contest problems</p>
+                        <a href="{{ path('team_problems') }}" class="btn btn-primary">View Problems</a>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4 mb-3">
+                <div class="card h-100">
+                    <div class="card-body text-center">
+                        <i class="fas fa-upload fa-3x text-success mb-3"></i>
+                        <h5 class="card-title">Submit Solution</h5>
+                        <p class="card-text">Submit your solution to problems</p>
+                        <a href="{{ path('team_submit') }}" class="btn btn-success">Submit</a>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4 mb-3">
+                <div class="card h-100">
+                    <div class="card-body text-center">
+                        <i class="fas fa-trophy fa-3x text-warning mb-3"></i>
+                        <h5 class="card-title">Scoreboard</h5>
+                        <p class="card-text">Check your ranking and progress</p>
+                        <a href="{{ path('team_scoreboard') }}" class="btn btn-warning">View Scoreboard</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# Team Summary Section (Compact) #}
+    <div class="team-summary">
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="fas fa-list-alt me-2"></i>Recent Submissions</h5>
+                    </div>
+                    <div class="card-body" style="max-height: 400px; overflow-y: auto;">
+                        {% if submissions is not empty %}
+                            {% include 'team/partials/submission_list.html.twig' %}
+                        {% else %}
+                            <p class="text-muted">No submissions yet. Start solving problems!</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="fas fa-comments me-2"></i>Clarifications</h5>
+                    </div>
+                    <div class="card-body" style="max-height: 400px; overflow-y: auto;">
+                        {% if clarifications is not empty %}
+                            {% include 'team/partials/clarification_list.html.twig' with {clarifications: clarifications} %}
+                        {% else %}
+                            <p class="text-muted">No clarifications.</p>
+                        {% endif %}
+                        
+                        <div class="mt-3">
+                            <a href="{{ path('team_clarification_add') }}" class="btn btn-outline-primary btn-sm" data-ajax-modal data-ajax-modal-after="initModalClarificationPreviewAdd">
+                                <i class="fas fa-question-circle me-1"></i> Request Clarification
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# Flash Messages #}
+    <div class="mt-4" data-flash-messages>
+        {% include 'partials/messages.html.twig' %}
+        {% if not contest.allowSubmit %}
+            {% include 'partials/alert.html.twig' with {'type': 'danger', 'message': 'Submissions (temporarily) disabled.'} %}
+        {% endif %}
+    </div>
+</div>
+
+<style>
+.hackathon-display {
+    animation: fadeIn 0.5s ease-in;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.hackathon-banner img {
+    transition: transform 0.3s ease;
+}
+
+.hackathon-banner:hover img {
+    transform: scale(1.02);
+}
+
+.hackathon-actions .card {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    border: none;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.hackathon-actions .card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+.team-summary .card {
+    border: none;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+</style>

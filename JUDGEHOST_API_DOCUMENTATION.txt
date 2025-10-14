@@ -1,0 +1,423 @@
+# DOMjudge Judgehost API Documentation
+
+## Overview
+
+This document describes the communication protocol between DOMjudge judgehosts and the DOMjudge server (domserver). The communication is entirely REST API-based over HTTP(S), with judgehosts acting as clients that poll the server for work and report results back.
+## Authentication
+
+Judgehosts authenticate using HTTP Basic Authentication:
+- Username: `judgehost` (default)
+- Password: Generated secret stored in `/etc/restapi.secret`
+- Credentials format: `<ID> <API_URL> <USERNAME> <PASSWORD>`
+
+Example `/etc/restapi.secret`:
+```
+default	http://localhost/api	judgehost	GhKSwKCpyO+w+zoEzNEoP6IQOpjpDuNz
+```
+
+## Core API Endpoints
+
+### 1. Judgehost Registration
+**Endpoint:** `POST /api/judgehosts`
+**Purpose:** Register a new judgehost or reactivate an existing one
+**Parameters:**
+- `hostname` (required): The hostname of the judgehost
+
+**Response:** Returns list of unfinished judgings that need to be restarted
+```json
+[
+  {"jobid": 123, "submitid": 456},
+  {"jobid": 124, "submitid": 457}
+]
+```
+
+### 2. Fetch Work
+**Endpoint:** `POST /api/judgehosts/fetch-work`
+**Purpose:** Get judge tasks to execute
+**Parameters:**
+- `hostname` (required): The hostname of the judgehost
+- `max_batchsize` (optional): Maximum number of tasks to return
+
+**Response:** Array of JudgeTask objects
+```json
+[
+  {
+    "jobid": 123,
+    "submitid": 456,
+    "type": "judge",
+    "priority": 10,
+    "starttime": null,
+    "valid": true,
+    // ... additional task data
+  }
+]
+```
+
+### 3. Update Judgehost Status
+**Endpoint:** `PUT /api/judgehosts/{hostname}`
+**Purpose:** Update judgehost configuration (enable/disable)
+**Parameters:**
+- `enabled` (required): Boolean to enable/disable the judgehost
+
+### 4. Update Judging Results
+**Endpoint:** `PUT /api/judgehosts/update-judging/{hostname}/{judgetaskid}`
+**Purpose:** Report compilation results back to server
+**Parameters:**
+- `compile_success` (boolean): Whether compilation was successful
+- `output_compile` (string): Compilation output/errors
+- `entry_point` (string): Determined entry point for execution
+- `compile_metadata` (string): Base64-encoded compilation metadata
+
+### 5. Get Files
+**Endpoint:** `GET /api/judgehosts/get_files/{type}/{id}`
+**Purpose:** Download files needed for judging
+**Types:**
+- `source`: Get submission source files
+- `testcase`: Get testcase input/output files
+- `compile`: Get compilation scripts
+- `run`: Get execution scripts
+- `compare`: Get output comparison scripts
+- `debug`: Get debug scripts
+
+### 6. Submit Run Results
+**Endpoint:** `PUT /api/judgehosts/add-judging-run/{hostname}/{judgetaskid}`
+**Purpose:** Report individual testcase execution results
+**Parameters:**
+- `runresult`: Result of the run (AC, WA, TLE, RTE, etc.)
+- `runtime`: Execution time in seconds
+- `output_run`: Program output (if needed)
+- `output_error`: Error output (if any)
+- `output_system`: System/judge output
+- `output_diff`: Diff output (for wrong answers)
+- `metadata`: Base64-encoded run metadata
+
+### 7. Submit Hackathon Scores (Custom Judgehost)
+**Endpoint:** `POST /api/judgehosts/{hostname}/judgings`
+**Purpose:** Send back detailed rubric-based scores, feedback, and logs for hackathon submissions
+**Parameters:**
+- `submission_id` (required): ID of the submission being judged
+- `scores` (required): Array of rubric scores
+- `aggregate_score` (optional): Overall aggregate score
+- `logs` (optional): Execution logs
+- `timestamp` (optional): When judging completed
+
+**Request Example:**
+```json
+{
+    "submission_id": 123,
+    "scores": [
+        {
+            "rubric": "creativity",
+            "type": "manual",
+            "judge_id": 7,
+            "score": 8.5,
+            "feedback": "Innovative UI."
+        },
+        {
+            "rubric": "accuracy", 
+            "type": "automated",
+            "judgehost_id": 2,
+            "score": 0.95,
+            "feedback": null
+        }
+    ],
+    "aggregate_score": 8.15,
+    "logs": "All tests passed. Performance: 1.2s.",
+    "timestamp": "2025-10-10T12:00:00Z"
+}
+```
+
+**Response:**
+```json
+{
+    "success": true,
+    "message": "Processed 2 rubric scores for submission 123",
+    "scores_processed": 2
+}
+```
+
+### 8. Get Problem Rubrics
+**Endpoint:** `GET /api/contests/{cid}/problems/{id}/rubrics`
+**Purpose:** Get all rubrics defined for a specific problem
+**Parameters:**
+- `cid`: Contest ID
+- `id`: Problem external ID
+
+**Response Example:**
+```json
+[
+    {
+        "name": "creativity",
+        "weight": 0.3,
+        "type": "manual",
+        "threshold": 0.6,
+        "description": "Measures creative approach and innovation"
+    },
+    {
+        "name": "accuracy",
+        "weight": 0.7,
+        "type": "automated", 
+        "threshold": 0.8,
+        "description": "Correctness of solution and test coverage"
+    }
+]
+```
+
+## Communication Flow
+
+### Initial Startup
+1. **Judgehost starts** → Reads configuration from `/etc/judgehost-config.php`
+2. **Load credentials** → Reads REST API credentials from `/etc/restapi.secret`
+3. **Register with server** → `POST /api/judgehosts` with hostname
+4. **Receive unfinished work** → Server returns any incomplete judgings
+
+### Main Work Loop
+1. **Poll for work** → `POST /api/judgehosts/fetch-work`
+2. **Receive judge tasks** → Server returns batch of work items
+3. **For each task:**
+   a. **Get source files** → `GET /api/judgehosts/get_files/source/{submitid}`
+   b. **Get compile script** → `GET /api/judgehosts/get_files/compile/{scriptid}`
+   c. **Compile submission** → Execute compilation locally
+   d. **Report compile result** → `PUT /api/judgehosts/update-judging/{hostname}/{judgetaskid}`
+   e. **Get testcases** → `GET /api/judgehosts/get_files/testcase/{testcaseid}`
+   f. **Execute runs** → Run program against each testcase
+   g. **Report run results** → `PUT /api/judgehosts/add-judging-run/{hostname}/{judgetaskid}`
+
+### Error Handling
+- **Network errors**: Exponential backoff with jitter
+- **Server errors**: Retry with backoff
+- **Critical errors**: Disable judgehost and log to syslog
+
+## Judge Task Types
+
+1. **judge**: Standard submission judging
+2. **debug_info**: Collect debug information
+3. **compile**: Compilation-only tasks
+4. **generic**: Generic tasks for system maintenance
+
+## File Transfer Protocol
+
+Files are transferred as base64-encoded content within JSON responses:
+```json
+{
+  "filename": "solution.cpp",
+  "content": "I2luY2x1ZGU8aW9zdHJlYW0+...", // base64 encoded
+  "executable": false
+}
+```
+
+## Configuration Files
+
+### `/etc/judgehost-config.php`
+- Syslog configuration
+- Temporary directory settings
+- HTTP request backoff parameters
+- Environment-specific overrides
+
+### `/etc/restapi.secret`
+- REST API credentials
+- Multiple endpoint support
+- Format: `<ID> <URL> <USERNAME> <PASSWORD>`
+
+## Docker Compose Setup
+
+### Complete Docker Environment
+```yaml
+services:
+  mariadb:
+    image: mariadb
+    environment:
+      - MYSQL_ROOT_PASSWORD=domjudge
+      - MYSQL_USER=domjudge
+      - MYSQL_PASSWORD=domjudge
+      - MYSQL_DATABASE=domjudge
+    ports:
+      - 127.0.0.1:13306:3306
+    command: --max-connections=1000 --max-allowed-packet=512M
+
+  domserver:
+    image: domjudge/domserver
+    hostname: domjudge-server
+    volumes:
+      - ./data:/data
+    ports:
+      - 12345:80
+    environment:
+      - MYSQL_HOST=mariadb
+      - MYSQL_USER=domjudge
+      - MYSQL_PASSWORD=domjudge
+      - MYSQL_DATABASE=domjudge
+    depends_on:
+      - mariadb
+
+  judgehost:
+    image: domjudge/judgehost
+    hostname: judgehost-1
+    privileged: true
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+      - ./chroot:/chroot
+    environment:
+      - DOMSERVER_BASEURL=http://domserver/
+      - JUDGEDAEMON_USERNAME=judgehost
+      - JUDGEDAEMON_PASSWORD=password
+    depends_on:
+      - domserver
+```
+
+### Current Development Setup
+```yaml
+services:
+  mariadb:
+    image: mariadb
+    ports:
+      - 127.0.0.1:13306:3306
+    environment:
+      - MYSQL_ROOT_PASSWORD=domjudge
+      - MYSQL_USER=domjudge
+      - MYSQL_PASSWORD=domjudge
+      - MYSQL_DATABASE=domjudge
+
+  domjudge:
+    image: domjudge/domjudge-contributor
+    ports:
+      - 12345:80
+    privileged: true
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup
+      - .:${PWD}:cached
+      - ./chroot:/chroot
+    cgroup: host
+```
+
+## Setting Up Additional Judgehosts
+
+### Method 1: Docker Container
+```bash
+# Start additional judgehost container
+docker run -d \
+  --name judgehost-2 \
+  --hostname judgehost-2 \
+  --privileged \
+  -v /sys/fs/cgroup:/sys/fs/cgroup:ro \
+  -e DOMSERVER_BASEURL=http://your-domserver/ \
+  -e JUDGEDAEMON_USERNAME=judgehost \
+  -e JUDGEDAEMON_PASSWORD=your-password \
+  domjudge/judgehost
+```
+
+### Method 2: Physical/VM Installation
+1. **Install DOMjudge judgehost package**
+2. **Configure `/etc/domjudge/restapi.secret`:**
+   ```
+   default http://your-domserver/api judgehost your-password
+   ```
+3. **Start judgedaemon service:**
+   ```bash
+   sudo systemctl enable judgehost
+   sudo systemctl start judgehost
+   ```
+
+### Method 3: Manual Standalone
+```bash
+# Clone and build DOMjudge
+git clone https://github.com/DOMjudge/domjudge.git
+cd domjudge
+
+# Configure and build
+./configure --enable-judgehost-only
+make judgehost
+
+# Install
+sudo make install-judgehost
+
+# Configure credentials
+echo "default http://your-server/api judgehost password" > /etc/domjudge/restapi.secret
+
+# Run judgedaemon
+sudo /opt/domjudge/judgehost/bin/judgedaemon
+```
+
+## Security Considerations
+
+### Network Security
+- Use HTTPS in production environments
+- Restrict judgehost network access to domserver only
+- Implement firewall rules for judgehost communication
+
+### Execution Security
+- Judgehosts run submissions in chroot environments
+- Use cgroups for resource limitation
+- Submissions run with restricted user privileges
+- Network access blocked during execution
+
+### Authentication Security
+- Use strong, unique passwords for judgehost credentials
+- Rotate credentials regularly
+- Monitor for unauthorized judgehost registrations
+
+## Monitoring and Debugging
+
+### Log Files
+- **System logs**: `/var/log/syslog` (if SYSLOG enabled)
+- **Judgedaemon logs**: Check systemd journal with `journalctl -u judgehost`
+- **Web interface**: Admin → Judgehosts section shows status
+
+### Health Checks
+- **Judgehost status**: Check last poll time in web interface
+- **Queue status**: Monitor judge task queue length
+- **Resource usage**: Monitor CPU, memory, and disk usage
+
+### Common Issues
+1. **Network connectivity**: Verify domserver accessibility
+2. **Authentication**: Check credentials in `/etc/restapi.secret`
+3. **Chroot issues**: Ensure proper chroot environment setup
+4. **Permission problems**: Verify judgedaemon can write to work directories
+
+## API Response Codes
+
+- **200 OK**: Successful request
+- **400 Bad Request**: Missing parameters or invalid data
+- **401 Unauthorized**: Authentication failed
+- **403 Forbidden**: Insufficient permissions
+- **404 Not Found**: Requested resource doesn't exist
+- **500 Internal Server Error**: Server-side error
+
+## Performance Optimization
+
+### Batch Processing
+- Judgehosts request multiple tasks per poll
+- Batch size automatically determined based on queue length
+- Configurable via `max_batchsize` parameter
+
+### Caching
+- Compilation scripts cached locally
+- Testcase files cached between runs
+- Executable files reused when possible
+
+### Resource Management
+- Configurable memory and time limits per submission
+- Automatic cleanup of temporary files
+- Disk space monitoring with automatic warnings
+
+## Integration with Hackathon Extensions
+
+The current codebase includes hackathon-specific features:
+
+### Hackathon Submission Types
+- **File uploads**: Direct file submission
+- **GitHub repositories**: Integration with Git repositories
+- **Demo URLs**: Live demonstration links
+- **Video submissions**: Video demonstration files
+
+### Additional Entities
+- **SubmissionDeliverable**: Files attached to hackathon submissions
+- **ProblemDisplayData**: Rich problem descriptions with banners
+- **ContestDisplayData**: Contest branding and information
+
+### Extended API Endpoints
+The hackathon extensions don't modify the core judgehost API but add additional web interfaces for submission management and display.
+
+---
+
+This documentation covers the complete judgehost-domserver communication protocol as implemented in the current DOMjudge v9 codebase with hackathon extensions.

@@ -1,0 +1,27 @@
+{% extends 'jury/base.html.twig' %}
+{% import 'jury/jury_macros.twig' as macros %}
+
+{% block title %}Hackathon Contest Management{% endblock %}
+
+{% block extrahead %}
+    {{ parent() }}
+    {{ macros.table_extrahead() }}
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1>Hackathon Contest Management</h1>
+    <p>Welcome to the hackathon contest management page. Add your management UI here.</p>
+
+    <div class="mb-3">
+        <a href="{{ path('jury_hackathon_quick_add') }}" class="btn btn-success">Quick Add Hackathon</a>
+    </div>
+
+    <h2>Available Contests</h2>
+    {{ macros.table(contests_table, table_fields) }}
+</div>
+{% endblock %}
+
+{% block extrafooter %}
+    {{ macros.toggle_autosubmit_extrafooter() }}
+{% endblock %}

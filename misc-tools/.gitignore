@@ -1,0 +1,9 @@
+/fix_permissions
+/configure-domjudge
+/export-contest
+/import-contest
+/dj_make_chroot
+/dj_make_chroot_docker
+/dj_run_chroot
+/dj_judgehost_cleanup
+/force-passwords

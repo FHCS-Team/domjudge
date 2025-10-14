@@ -1,0 +1,74 @@
+{# Use the public base template to get the standard DOMjudge menu/header #}
+{% extends 'jury/base.html.twig' %}
+
+
+{% block title %}Extensions Plugin{% endblock %}
+
+
+{% block content %}
+    <h1>Hackathon Extensions</h1>
+    <p>This page provides access to DOMjudge hackathon extensions.</p>
+    
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-trophy"></i> Contest Management</h5>
+                </div>
+                <div class="card-body">
+                    <p>Manage hackathon contests with enhanced features.</p>
+                    <a href="{{ path('jury_hackathon') }}" class="btn btn-primary">
+                        <i class="fas fa-list"></i> View Hackathon Contests
+                    </a>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-exchange-alt"></i> Import/Export</h5>
+                </div>
+                <div class="card-body">
+                    <p>Import and export complete contest configurations.</p>
+                    <div class="d-grid gap-2">
+                        <a href="{{ path('jury_import_form') }}" class="btn btn-success">
+                            <i class="fas fa-upload"></i> Import Contest
+                        </a>
+                        <small class="text-muted">Export available from individual contest pages</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="mt-4">
+        <h3>Features Available</h3>
+        <div class="row">
+            <div class="col-md-4">
+                <h5><i class="fas fa-toggle-on"></i> Hackathon Mode</h5>
+                <ul>
+                    <li>Contest-specific hackathon toggle</li>
+                    <li>Enhanced team interface</li>
+                    <li>Modern problem display</li>
+                </ul>
+            </div>
+            <div class="col-md-4">
+                <h5><i class="fas fa-file-upload"></i> Deliverables</h5>
+                <ul>
+                    <li>File uploads (ZIP, docs)</li>
+                    <li>URL submissions (GitHub, demos)</li>
+                    <li>Multiple deliverable types</li>
+                </ul>
+            </div>
+            <div class="col-md-4">
+                <h5><i class="fas fa-clipboard-check"></i> Rubric Scoring</h5>
+                <ul>
+                    <li>Manual judging interface</li>
+                    <li>Multiple criteria scoring</li>
+                    <li>Feedback and comments</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+{% endblock %}

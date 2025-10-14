@@ -1,0 +1,302 @@
+{% extends 'jury/base.html.twig' %}
+
+{% block title %}Edit Display Data - {{ problem.name }}{% endblock %}
+
+{% block content %}
+<ul class="nav nav-tabs mb-4">
+    <li class="nav-item">
+        <a class="nav-link" href="{{ path('jury_hackathon_display', {'contestId': contest.cid}) }}">Overview</a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link active" href="{{ path('jury_hackathon_problems', {'contestId': contest.cid}) }}">Problems</a>
+    </li>
+    <li class="nav-item">
+        {# Phases removed - feature disabled #}
+    </li>
+</ul>
+<div class="container mt-4">
+    <h1>Edit Display Data for <b>{{ problem.name }}</b></h1>
+    <a href="{{ path('jury_hackathon_problems', {'contestId': contest.cid}) }}" class="btn btn-secondary mb-3">&larr; Back to Problem List</a>
+    {# Rubric and attachment management will be embedded below #}
+    <div class="row">
+        <div class="col-md-7">
+            <div class="card mb-3">
+                <div class="card-body">
+                    {{ form_start(form, {'attr': {'enctype': 'multipart/form-data'}}) }}
+                    {{ form_row(form.displayName) }}
+                    
+                    {# Banner Image Section #}
+                    <div class="mb-3">
+                        <label class="form-label">Banner Image</label>
+                        {% if displayData.imageUrl %}
+                            <div class="mb-2">
+                                <img src="{{ displayData.imageUrl }}" class="img-thumbnail" style="max-width: 300px; max-height: 150px;" alt="Current banner">
+                                <div class="text-muted small">Current: {{ displayData.imageUrl }}</div>
+                            </div>
+                        {% endif %}
+                        {{ form_row(form.imageUrl) }}
+                        {{ form_row(form.bannerFile) }}
+                        <div class="form-text">Upload a new banner image or provide a URL above. Upload will override URL.</div>
+                    </div>
+                    
+                    {# Use form_widget to ensure textarea gets the correct id for TinyMCE #}
+                    <div class="mb-3">
+                        {{ form_label(form.description) }}
+                        {{ form_widget(form.description, {'id': 'description-editor'}) }}
+                        {{ form_errors(form.description) }}
+                    </div>
+                    {# metadata moved to dedicated tables; field removed from form #}
+                    <div class="mb-3">
+                        {{ form_row(form.attachmentScope) }}
+                    </div>
+                    <div class="mb-3">
+                        {{ form_row(form.attachmentContentType) }}
+                    </div>
+
+                    {# Attachment inputs depend on the selected content type. We render them below the dropdowns and toggle via JS. #}
+                    <div id="attachment-inputs">
+                        <div id="attachment-file-row" class="mb-3">
+                            {{ form_label(form.attachmentFile) }}
+                            {{ form_widget(form.attachmentFile) }}
+                            <div class="form-text">Any file type allowed. Max 20MB.</div>
+                        </div>
+                        <div id="attachment-link-row" class="mb-3" style="display:none;">
+                            {{ form_label(form.attachmentLink) }}
+                            {{ form_widget(form.attachmentLink) }}
+                            <div class="form-text">Paste a URL to add as an attachment (e.g. a file, image, or resource link).</div>
+                        </div>
+                        <div class="mb-3">
+                            <button id="ajax-attachment-submit" class="btn btn-primary">Add Attachment (AJAX)</button>
+                            <div id="ajax-attachment-feedback" class="mt-2"></div>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary mt-3">Save</button>
+                    {{ form_end(form) }}
+                </div>
+            </div>
+            {# Add rubric form (inline, Symfony form) - moved here #}
+            <div class="card mb-3 mt-4">
+                <div class="card-header">Add Rubric</div>
+                <div class="card-body">
+                    {{ form_start(rubricForm) }}
+                    {{ form_row(rubricForm.name) }}
+                    {{ form_row(rubricForm.type) }}
+                    {{ form_row(rubricForm.weight) }}
+                    {{ form_row(rubricForm.threshold) }}
+                    {{ form_row(rubricForm.description) }}
+                    <button type="submit" class="btn btn-success">Add Rubric</button>
+                    {{ form_end(rubricForm) }}
+                </div>
+            </div>
+            {# Attachment add is handled inline using the main Symfony form fields; see the Add Attachment button below the attachment inputs. #}
+        </div>
+        <div class="col-md-5">
+            <div class="card mb-3">
+                <div class="card-header">Preview</div>
+                <div class="card-body">
+                    <h5 id="preview-displayName">{{ form.displayName.vars.value }}</h5>
+                    <style>
+                    #preview-description img {
+                        max-width: 100%;
+                        height: auto;
+                        display: block;
+                    }
+                    </style>
+                    <div id="preview-description" class="mb-2" style="min-height:2em; border:1px solid #eee; padding:0.5em; background:#fafbfc;">{{ form.description.vars.value|raw }}</div>
+                    {# Metadata preview removed; metadata stored in separate tables now #}
+                    <div>
+                        <strong>Attachments:</strong>
+                        <ul id="preview-attachments">
+                        {% set previewAttachments = attachments is defined ? attachments : (displayData is defined and displayData.imageUrl ? [{ 'url': displayData.imageUrl, 'name': 'Banner', 'type': 'image' }] : []) %}
+            {% for att in previewAttachments %}
+                                <li style="margin-bottom: 0.5em;">
+                                    {% if att.url is defined and att.type is defined and att.type starts with 'image/' %}
+                                        <img src="{{ att.url }}" alt="Attachment" style="max-width: 80px; max-height: 60px; vertical-align: middle; margin-right: 8px;">
+                                    {% elseif att.url is defined and att.type is defined and att.type starts with 'video/' %}
+                                        <video src="{{ att.url }}" controls style="max-width: 80px; max-height: 60px; vertical-align: middle; margin-right: 8px;"></video>
+                                    {% elseif att.url is defined and att.type is defined and att.type == 'link' %}
+                                        <i class="fas fa-link"></i>
+                                    {% elseif att.url is defined %}
+                                        <i class="fas fa-paperclip"></i>
+                                    {% endif %}
+                                    <a href="{{ att.url }}" target="_blank">{{ att.name|default(att.url) }}</a>
+                                    {% if att.type is defined and att.type starts with 'image/' %}
+                                        <span class="ms-2">HTML: <code>&lt;img src=&quot;{{ att.url }}&quot; alt="Attachment"&gt;</code></span>
+                                    {% elseif att.type is defined and att.type starts with 'video/' %}
+                                        <span class="ms-2">HTML: <code>&lt;video src=&quot;{{ att.url }}&quot; controls&gt;&lt;/video&gt;</code></span>
+                                    {% elseif att.type is defined and att.type == 'link' %}
+                                        <span class="ms-2">HTML: <code>&lt;a href=&quot;{{ att.url }}&quot; target=&quot;_blank&quot;&gt;{{ att.name|default(att.url) }}&lt;/a&gt;</code></span>
+                                    {% endif %}
+                                    {# Show selected content type / visibility badges if available #}
+                                    {% if att.content_type is defined and att.content_type %}
+                                        <span class="badge bg-secondary ms-2">{{ att.content_type }}</span>
+                                    {% endif %}
+                                    {% if att.visibility is defined and att.visibility %}
+                                        <span class="badge bg-info ms-2">{{ att.visibility }}</span>
+                                    {% endif %}
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mb-3">
+                <div class="card-header">Rubrics</div>
+                <div class="card-body">
+                    {# List existing rubrics #}
+                    {% if rubrics is defined and rubrics|length > 0 %}
+                        <ul class="list-group mb-3">
+                        {% for rubric in rubrics %}
+                            <li class="list-group-item">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <strong>{{ rubric.name }}</strong>
+                                        <div class="text-muted small">{{ rubric.description }}</div>
+                                        <div class="small">
+                                            <span class="badge bg-info">Type: {{ rubric.type }}</span>
+                                            <span class="badge bg-secondary">Weight: {{ rubric.weight }}</span>
+                                            <span class="badge bg-warning text-dark">Threshold: {{ rubric.threshold is not null ? rubric.threshold : 'N/A' }}</span>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <a href="{{ path('jury_rubric_attachments', {'contestId': contest.cid, 'problemId': problem.probid, 'rubricId': rubric.rubricid}) }}" class="btn btn-sm btn-outline-primary">
+                                            <i class="fas fa-paperclip"></i> Manage Attachments
+                                        </a>
+                                    </div>
+                                </div>
+                                {# Quick attachment count display #}
+                                {% if rubric.attachments is defined and rubric.attachments|length > 0 %}
+                                    <div class="mt-2 text-muted small">
+                                        <i class="fas fa-paperclip"></i> {{ rubric.attachments|length }} attachment(s)
+                                    </div>
+                                {% endif %}
+                            </li>
+                        {% endfor %}
+                        </ul>
+                    {% else %}
+                        <div class="text-muted mb-2">No rubrics yet.</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<script src="/js/tinymce_7.1.2/tinymce/js/tinymce/tinymce.min.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        var textarea = document.getElementById('description-editor');
+        if (!textarea) return;
+        tinymce.init({
+            selector: '#description-editor',
+            height: 600,
+            plugins: 'image link code lists table',
+            toolbar: 'undo redo | styles | bold italic underline | alignleft aligncenter alignright alignjustify | bullist numlist outdent indent | link image | code',
+            menubar: false,
+            branding: false,
+            license_key: 'gpl',
+            images_upload_url: '/jury/upload-image-endpoint',
+            automatic_uploads: true,
+            images_upload_handler: null // Use default handler for real upload
+        });
+    });
+</script>
+<script>
+    // Toggle attachment inputs depending on content type selection
+    document.addEventListener('DOMContentLoaded', function() {
+        var contentTypeSelect = document.querySelector('select[name="problem_display_data[attachmentContentType]"]');
+        var fileRow = document.getElementById('attachment-file-row');
+        var linkRow = document.getElementById('attachment-link-row');
+
+        if (!contentTypeSelect || !fileRow || !linkRow) return;
+
+        function updateAttachmentInputs() {
+            var val = contentTypeSelect.value;
+            if (val === 'link') {
+                fileRow.style.display = 'none';
+                linkRow.style.display = '';
+            } else {
+                fileRow.style.display = '';
+                linkRow.style.display = 'none';
+            }
+        }
+
+        // initialize
+        updateAttachmentInputs();
+        // listen for changes
+        contentTypeSelect.addEventListener('change', updateAttachmentInputs);
+    });
+</script>
+<script>
+    (function(){
+        var submit = document.getElementById('ajax-attachment-submit');
+        var feedback = document.getElementById('ajax-attachment-feedback');
+        var previewList = document.getElementById('preview-attachments');
+        if (!submit) return;
+
+        submit.addEventListener('click', function(e){
+            e.preventDefault();
+            feedback.innerText = '';
+
+            var fd = new FormData();
+            // Symfony form field names
+            var fileInput = document.querySelector('input[name="problem_display_data[attachmentFile]"]');
+            var linkInput = document.querySelector('input[name="problem_display_data[attachmentLink]"]');
+            var scopeSelect = document.querySelector('select[name="problem_display_data[attachmentScope]"]');
+            var contentTypeSelect = document.querySelector('select[name="problem_display_data[attachmentContentType]"]');
+
+            if (fileInput && fileInput.files && fileInput.files.length > 0) {
+                fd.append('attachmentFile', fileInput.files[0]);
+            }
+            if (linkInput && linkInput.value) {
+                fd.append('attachmentLink', linkInput.value);
+            }
+            if (scopeSelect) {
+                fd.append('attachmentScope', scopeSelect.value);
+            }
+            if (contentTypeSelect) {
+                fd.append('attachmentContentType', contentTypeSelect.value);
+            }
+
+            var url = '{{ path('jury_hackathon_attachment_ajax_add', {'contestId': contest.cid, 'problemId': problem.probid}) }}';
+            fetch(url, {
+                method: 'POST',
+                body: fd,
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                credentials: 'same-origin'
+            }).then(function(res){
+                return res.json();
+            }).then(function(data){
+                if (!data || !data.success) {
+                    feedback.innerText = data && data.error ? data.error : 'Failed to add attachment';
+                    return;
+                }
+                var a = data.attachment;
+                var li = document.createElement('li');
+                li.style.marginBottom = '0.5em';
+                var link = document.createElement('a');
+                link.href = a.url;
+                link.target = '_blank';
+                link.innerText = a.name || a.url;
+                li.appendChild(link);
+                if (a.contentType) {
+                    var span = document.createElement('span');
+                    span.className = 'badge bg-secondary ms-2';
+                    span.innerText = a.contentType;
+                    li.appendChild(span);
+                }
+                previewList.appendChild(li);
+                feedback.innerText = 'Attachment added.';
+                // clear file and link inputs
+                if (fileInput) fileInput.value = '';
+                if (linkInput) linkInput.value = '';
+            }).catch(function(err){
+                feedback.innerText = 'Network or server error';
+                console.error(err);
+            });
+        });
+    })();
+</script>
+{% endblock %}

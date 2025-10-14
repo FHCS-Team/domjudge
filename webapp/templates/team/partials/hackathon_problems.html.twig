@@ -1,0 +1,182 @@
+{# Hackathon Problems Display Template #}
+<div class="hackathon-problems">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="mb-0">
+            <i class="fas fa-puzzle-piece text-primary me-2"></i>
+            Challenge Problems
+        </h1>
+        <div class="badge bg-info fs-6">{{ problems|length }} Problems Available</div>
+    </div>
+
+    {% if problems is empty %}
+        <div class="alert alert-info text-center">
+            <i class="fas fa-info-circle fa-2x mb-3"></i>
+            <h4>No problems available yet</h4>
+            <p class="mb-0">Problems will be published here when the contest starts.</p>
+        </div>
+    {% else %}
+        <div class="row">
+            {% for contestProblem in problems %}
+                {% set problem = contestProblem.problem %}
+                {% set displayData = problemDisplayData[problem.probid] ?? null %}
+                
+                <div class="col-md-6 col-lg-4 mb-4">
+                    <div class="card problem-card h-100">
+                        {# Problem Image/Banner #}
+                        {% if displayData and displayData.imageUrl %}
+                            <div class="card-img-top-wrapper" style="height: 200px; overflow: hidden;">
+                                <img src="{{ displayData.imageUrl }}" class="card-img-top" alt="{{ displayData.displayName ?? problem.name }}" style="width: 100%; height: 100%; object-fit: cover;">
+                            </div>
+                        {% else %}
+                            <div class="card-img-top bg-gradient-primary d-flex align-items-center justify-content-center" style="height: 200px;">
+                                <i class="fas fa-code fa-4x text-white opacity-50"></i>
+                            </div>
+                        {% endif %}
+
+                        <div class="card-body d-flex flex-column">
+                            {# Problem Title #}
+                            <div class="d-flex align-items-start mb-2">
+                                <span class="badge bg-primary me-2 mt-1">{{ contestProblem.shortname }}</span>
+                                <h5 class="card-title mb-0 flex-grow-1">
+                                    {{ displayData.displayName ?? problem.name }}
+                                </h5>
+                            </div>
+
+                            {# Problem Description #}
+                            {% if displayData and displayData.description %}
+                                <div class="card-text problem-description mb-3" style="max-height: 120px; overflow-y: auto;">
+                                    {{ displayData.description|raw }}
+                                </div>
+                            {% else %}
+                                <p class="card-text text-muted mb-3">
+                                    <i class="fas fa-file-alt me-1"></i>
+                                    Click to view problem statement
+                                </p>
+                            {% endif %}
+
+                            {# Problem Stats #}
+                            <div class="problem-stats mb-3">
+                                <div class="row text-center">
+                                    <div class="col-6">
+                                        <div class="stat-item">
+                                            <div class="stat-value text-success">{{ stats.teams.submitted[problem.probid] ?? 0 }}</div>
+                                            <div class="stat-label">Submitted</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="stat-item">
+                                            <div class="stat-value text-primary">{{ stats.teams.accepted[problem.probid] ?? 0 }}</div>
+                                            <div class="stat-label">Solved</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {# Action Buttons #}
+                            <div class="mt-auto">
+                                <div class="d-grid gap-2">
+                                    {# View Problem Statement - Commented out for hackathons #}
+                                    {# 
+                                    <a href="{{ path('team_problem_statement', {'contestId': current_team_contest.cid, 'probId': problem.probid}) }}" 
+                                       class="btn btn-outline-primary btn-sm" target="_blank">
+                                        <i class="fas fa-file-alt me-1"></i> View Statement
+                                    </a>
+                                    #}
+                                    
+                                    {# Submit Solution Button #}
+                                    {% if current_team_contest.allowSubmit %}
+                                        <a href="{{ path('team_submit', {'problemId': problem.probid}) }}" 
+                                           class="btn btn-success btn-sm">
+                                            <i class="fas fa-upload me-1"></i> Submit Solution
+                                        </a>
+                                    {% else %}
+                                        <button class="btn btn-secondary btn-sm" disabled>
+                                            <i class="fas fa-lock me-1"></i> Submissions Disabled
+                                        </button>
+                                    {% endif %}
+                                </div>
+
+                                {# Attachments #}
+                                {% if displayData and displayData.attachments %}
+                                    <div class="mt-2">
+                                        <div class="dropdown">
+                                            <button class="btn btn-outline-secondary btn-sm dropdown-toggle w-100" type="button" data-bs-toggle="dropdown">
+                                                <i class="fas fa-paperclip me-1"></i> Attachments
+                                            </button>
+                                            <ul class="dropdown-menu w-100">
+                                                {% for attachment in displayData.attachments %}
+                                                    <li>
+                                                        <a class="dropdown-item" href="{{ attachment.url }}" target="_blank">
+                                                            <i class="fas fa-download me-1"></i> {{ attachment.name }}
+                                                            {% if attachment.type %}<small class="text-muted">({{ attachment.type }})</small>{% endif %}
+                                                        </a>
+                                                    </li>
+                                                {% endfor %}
+                                            </ul>
+                                        </div>
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        {# Problem Status Indicator #}
+                        {% if team_problem_status is defined and team_problem_status[problem.probid] is defined %}
+                            {% set status = team_problem_status[problem.probid] %}
+                            <div class="card-footer p-2">
+                                {% if status.solved %}
+                                    <span class="badge bg-success w-100">
+                                        <i class="fas fa-check me-1"></i> Solved!
+                                    </span>
+                                {% elseif status.submitted %}
+                                    <span class="badge bg-warning w-100">
+                                        <i class="fas fa-clock me-1"></i> {{ status.submissions }} Attempt{{ status.submissions != 1 ? 's' : '' }}
+                                    </span>
+                                {% else %}
+                                    <span class="badge bg-light text-dark w-100">
+                                        <i class="fas fa-rocket me-1"></i> Not Attempted
+                                    </span>
+                                {% endif %}
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+</div>
+
+<style>
+.hackathon-problems .problem-card {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    border: none;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.hackathon-problems .problem-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+}
+
+.hackathon-problems .stat-item {
+    font-size: 0.9em;
+}
+
+.hackathon-problems .stat-value {
+    font-weight: bold;
+    font-size: 1.1em;
+}
+
+.hackathon-problems .stat-label {
+    font-size: 0.75em;
+    color: #6c757d;
+}
+
+.hackathon-problems .problem-description {
+    font-size: 0.9em;
+    line-height: 1.4;
+}
+
+.bg-gradient-primary {
+    background: linear-gradient(135deg, #007bff, #0056b3);
+}
+</style>

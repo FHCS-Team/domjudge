@@ -1,0 +1,3 @@
+.git* export-ignore
+SECURITY.md export-ignore
+* text=auto eol=lf
