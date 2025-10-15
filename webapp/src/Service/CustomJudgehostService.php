@@ -6,6 +6,8 @@ use App\Entity\Problem;
 use App\Entity\Submission;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
+use Symfony\Component\Mime\Part\DataPart;
+use Symfony\Component\Mime\Part\Multipart\FormDataPart;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 use Symfony\Contracts\HttpClient\Exception\TransportExceptionInterface;
 use Symfony\Contracts\HttpClient\Exception\ClientExceptionInterface;
@@ -85,18 +87,23 @@ class CustomJudgehostService
         ]);
 
         try {
+            // Create a multipart form data for file upload
+            $formFields = [
+                'problem_id' => $problemId,
+                'problem_name' => $problemName,
+                'package_type' => 'file',
+                'project_type' => $projectType,
+                'problem_package' => DataPart::fromPath($packageFile->getRealPath(), $packageFile->getClientOriginalName()),
+            ];
+            
+            $formData = new FormDataPart($formFields);
+            
             $response = $this->httpClient->request('POST', $url, [
                 'timeout' => $this->getTimeout(),
-                'headers' => [
+                'headers' => array_merge($formData->getPreparedHeaders()->toArray(), [
                     'X-API-Key' => $this->getApiKey(),
-                ],
-                'body' => [
-                    'problem_id' => $problemId,
-                    'problem_name' => $problemName,
-                    'package_type' => 'file',
-                    'project_type' => $projectType,
-                    'problem_package' => fopen($packageFile->getRealPath(), 'r'),
-                ],
+                ]),
+                'body' => $formData->bodyToIterable(),
             ]);
 
             $statusCode = $response->getStatusCode();
@@ -173,16 +180,21 @@ class CustomJudgehostService
                 'file_count' => count($files),
             ]);
 
+            // Create a multipart form data for file upload
+            $submissionFields = [
+                'problem_id' => $problemId,
+                'package_type' => 'file',
+                'submission_file' => DataPart::fromPath($tarballPath, basename($tarballPath)),
+            ];
+            
+            $submissionFormData = new FormDataPart($submissionFields);
+            
             $response = $this->httpClient->request('POST', $url, [
                 'timeout' => $this->getTimeout(),
-                'headers' => [
+                'headers' => array_merge($submissionFormData->getPreparedHeaders()->toArray(), [
                     'X-API-Key' => $this->getApiKey(),
-                ],
-                'body' => [
-                    'problem_id' => $problemId,
-                    'package_type' => 'file',
-                    'submission_file' => fopen($tarballPath, 'r'),
-                ],
+                ]),
+                'body' => $submissionFormData->bodyToIterable(),
             ]);
 
             $statusCode = $response->getStatusCode();

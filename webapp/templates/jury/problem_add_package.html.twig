@@ -1,0 +1,486 @@
+{% extends "jury/base.html.twig" %}
+{% import "jury/jury_macros.twig" as macros %}
+
+{% block title %}Add problem package - {{ parent() }}{% endblock %}
+
+{% block extrahead %}
+    {{ parent() }}
+    <style>
+        .info-box {
+            background-color: #e7f3ff;
+            border-left: 4px solid #2196F3;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        .info-box h4 {
+            margin-top: 0;
+            color: #1976D2;
+        }
+        .success-box {
+            background-color: #d4edda;
+            border-left: 4px solid #28a745;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        .success-box h4 {
+            margin-top: 0;
+            color: #155724;
+        }
+        .error-box {
+            background-color: #f8d7da;
+            border-left: 4px solid #dc3545;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        .error-box h4 {
+            margin-top: 0;
+            color: #721c24;
+        }
+        .doc-section {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 15px;
+            margin-top: 20px;
+        }
+        .doc-section h4 {
+            margin-top: 0;
+        }
+        .code-block {
+            background-color: #f4f4f4;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 10px;
+            font-family: monospace;
+            font-size: 13px;
+            overflow-x: auto;
+        }
+        .upload-section {
+            border: 2px dashed #dee2e6;
+            border-radius: 8px;
+            padding: 30px;
+            background-color: #ffffff;
+            margin-bottom: 20px;
+        }
+        .problem-type-badge {
+            display: inline-block;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-weight: bold;
+            margin-right: 10px;
+        }
+        .custom-problem {
+            background-color: #17a2b8;
+            color: white;
+        }
+        .standard-problem {
+            background-color: #6c757d;
+            color: white;
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+
+    <h1>Add Problem Package</h1>
+
+    {# Success Message #}
+    {% if uploadStatus == 'success' %}
+        <div class="success-box">
+            <h4>✓ Upload Successful!</h4>
+            <p><strong>Problem package has been uploaded and processed successfully.</strong></p>
+            
+            {% if uploadDetails %}
+                <hr>
+                <table class="table table-sm table-bordered" style="background-color: white; margin-bottom: 15px;">
+                    {% if uploadDetails.probid %}
+                        <tr>
+                            <th style="width: 150px;">Problem ID</th>
+                            <td><strong>#{{ uploadDetails.probid }}</strong></td>
+                        </tr>
+                    {% endif %}
+                    {% if uploadDetails.name %}
+                        <tr>
+                            <th>Problem Name</th>
+                            <td>{{ uploadDetails.name }}</td>
+                        </tr>
+                    {% endif %}
+                    {% if uploadDetails.externalId %}
+                        <tr>
+                            <th>External ID</th>
+                            <td>{{ uploadDetails.externalId }}</td>
+                        </tr>
+                    {% endif %}
+                    {% if uploadDetails.isCustomProblem is defined %}
+                        <tr>
+                            <th>Problem Type</th>
+                            <td>
+                                {% if uploadDetails.isCustomProblem %}
+                                    <span class="problem-type-badge custom-problem">[Custom Problem] 🚀</span>
+                                    {% if uploadDetails.projectType %}
+                                        <br><small style="margin-left: 10px;">Project Type: <strong>{{ uploadDetails.projectType }}</strong></small>
+                                    {% endif %}
+                                {% else %}
+                                    <span class="problem-type-badge standard-problem">[Standard Problem]</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% endif %}
+                    {% if uploadDetails.isCustomProblem and uploadDetails.judgehostRegistered is defined %}
+                        <tr>
+                            <th>Custom Judgehost</th>
+                            <td>
+                                {% if uploadDetails.judgehostRegistered %}
+                                    <span style="color: #28a745; font-weight: bold;">[Registered] ✓</span>
+                                {% else %}
+                                    <span style="color: #ffc107; font-weight: bold;">[Pending]</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% endif %}
+                </table>
+            {% endif %}
+            
+            <div style="margin-top: 15px;">
+                {% if uploadDetails.probid %}
+                    <a href="{{ path('jury_problem', {'probId': uploadDetails.probid}) }}" class="btn btn-success">
+                        View Problem Details
+                    </a>
+                {% endif %}
+                <a href="{{ path('jury_problems') }}" class="btn btn-primary">
+                    Back to Problems List
+                </a>
+                <a href="{{ path('jury_problem_add_package') }}" class="btn btn-secondary">
+                    Upload Another Package
+                </a>
+            </div>
+        </div>
+    {% endif %}
+
+    {# Error Message #}
+    {% if uploadStatus == 'error' or error %}
+        <div class="error-box">
+            <h4>⚠ Upload Failed</h4>
+            <p><strong>{{ error|default('An error occurred while processing the problem package.') }}</strong></p>
+            
+            <div style="margin-top: 15px;">
+                <a href="{{ path('jury_problem_add_package') }}" class="btn btn-warning">
+                    Try Again
+                </a>
+                <a href="{{ path('jury_problems') }}" class="btn btn-secondary">
+                    Back to Problems
+                </a>
+            </div>
+        </div>
+    {% endif %}
+
+    {# Information Box #}
+    <div class="info-box">
+        <h4>📦 Problem Package Information</h4>
+        <p><strong>Your problem package should be a ZIP/TAR.GZ archive containing:</strong></p>
+        <ul style="margin-bottom: 5px;">
+            <li><strong>config.json</strong> - Root configuration defining containers, rubrics, and dependencies (required for custom problems)</li>
+            <li><strong>Container directories</strong> - One directory per container (e.g., <code>database/</code>, <code>submission/</code>):
+                <ul style="margin-top: 5px;">
+                    <li><strong>Dockerfile</strong> - Container image definition</li>
+                    <li><strong>stage1.config.json</strong> - Stage 1 (problem build) configuration</li>
+                    <li><strong>stage2.config.json</strong> - Stage 2 (submission evaluation) configuration</li>
+                    <li><strong>hooks/</strong> - Evaluation hooks:
+                        <ul>
+                            <li><code>pre/</code> - Pre-execution scripts (setup, initialization)</li>
+                            <li><code>post/</code> - Post-execution scripts (testing, evaluation)</li>
+                            <li><code>periodic/</code> - Monitoring scripts (health checks)</li>
+                        </ul>
+                    </li>
+                    <li><strong>data/</strong> - Container-specific data files</li>
+                </ul>
+            </li>
+            <li><strong>README.md</strong> - Problem description (optional)</li>
+        </ul>
+        <p style="margin-bottom: 0; margin-top: 10px;">
+            <em>If <strong>config.json</strong> is present with a <strong>containers</strong> array, the problem will be automatically detected as a <strong>Custom Problem</strong> 
+            and registered with the custom judgehost for multi-container evaluation.</em>
+        </p>
+    </div>
+
+    {# Upload Form #}
+    <div class="upload-section">
+        <h3 style="margin-top: 0;">Upload Form</h3>
+        
+        {{ form_start(form) }}
+            
+            <div class="form-group">
+                {{ form_label(form.package) }}
+                {{ form_widget(form.package, {'attr': {'class': 'form-control-file'}}) }}
+                {{ form_help(form.package) }}
+                {{ form_errors(form.package) }}
+                <small class="form-text text-muted">
+                    <strong>Required:</strong> ZIP file containing your problem package (max 100MB)
+                </small>
+            </div>
+            
+            <hr style="margin: 25px 0;">
+            
+            <h4>Optional Overrides</h4>
+            <p class="text-muted">
+                <small>These values will override settings from config.json or problem.yaml if provided.</small>
+            </p>
+            
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="form-group">
+                        {{ form_label(form.name) }}
+                        {{ form_widget(form.name, {'attr': {'class': 'form-control'}}) }}
+                        {{ form_help(form.name) }}
+                        {{ form_errors(form.name) }}
+                    </div>
+                </div>
+                
+                <div class="col-md-4">
+                    <div class="form-group">
+                        {{ form_label(form.externalId) }}
+                        {{ form_widget(form.externalId, {'attr': {'class': 'form-control'}}) }}
+                        {{ form_help(form.externalId) }}
+                        {{ form_errors(form.externalId) }}
+                    </div>
+                </div>
+                
+                <div class="col-md-4">
+                    <div class="form-group">
+                        {{ form_label(form.timeLimit) }}
+                        {{ form_widget(form.timeLimit, {'attr': {'class': 'form-control'}}) }}
+                        {{ form_help(form.timeLimit) }}
+                        {{ form_errors(form.timeLimit) }}
+                    </div>
+                </div>
+            </div>
+            
+            <div style="margin-top: 20px;">
+                {{ form_widget(form.upload) }}
+                <a href="{{ path('jury_problems') }}" class="btn btn-secondary">Cancel</a>
+            </div>
+            
+        {{ form_end(form) }}
+    </div>
+
+    {# Documentation Section #}
+    <div class="doc-section">
+        <h4>📚 Documentation & Examples</h4>
+        
+        <h5 style="margin-top: 20px;">Example Package Structure</h5>
+        <div class="code-block">
+problem-package.zip
+└── problem-id/
+    ├── config.json              ← Global configuration (required)
+    │
+    ├── database/                ← Database container
+    │   ├── Dockerfile           ← PostgreSQL image
+    │   ├── stage1.config.json   ← Stage 1 config (network disabled)
+    │   ├── stage2.config.json   ← Stage 2 config (network enabled, health check)
+    │   ├── hooks/
+    │   │   ├── pre/
+    │   │   │   ├── 01_initialize.sh    ← Initialize database
+    │   │   │   └── 02_migration.sh     ← Run migrations
+    │   │   └── periodic/
+    │   │       └── 01_healthcheck.sh   ← Monitor health
+    │   └── data/
+    │       └── baseline_queries.sql    ← Test queries
+    │
+    ├── submission/              ← Submission container (accepts student code)
+    │   ├── Dockerfile           ← Evaluation environment
+    │   ├── stage1.config.json   ← Stage 1 config
+    │   ├── stage2.config.json   ← Stage 2 config (accepts_submission: true)
+    │   ├── hooks/
+    │   │   ├── pre/
+    │   │   │   ├── 01_setup.sh         ← Setup environment
+    │   │   │   └── 02_migration.sh     ← Apply student migrations
+    │   │   └── post/
+    │   │       ├── 01_test_queries.sh      ← Test correctness
+    │   │       ├── 02_test_concurrency.sh  ← Test performance
+    │   │       └── 03_evaluate_storage.sh  ← Evaluate efficiency
+    │   └── data/
+    │
+    └── README.md                ← Problem description
+        </div>
+        
+        <h5 style="margin-top: 20px;">Sample config.json</h5>
+        <div class="code-block">
+{
+    "problem_id": "sql-optimization",
+    "problem_name": "Database Query Optimization Challenge",
+    "project_type": "database",
+    "time_limit": 1800,
+    
+    "containers": [
+        {
+            "container_id": "database",
+            "name": "PostgreSQL Database Server",
+            "accepts_submission": false,
+            "dockerfile_path": "database/Dockerfile",
+            "depends_on": [],
+            "terminate_on_finish": []
+        },
+        {
+            "container_id": "submission",
+            "name": "Query Evaluation Container",
+            "accepts_submission": true,
+            "dockerfile_path": "submission/Dockerfile",
+            "depends_on": [
+                {
+                    "container_id": "database",
+                    "condition": "healthy",
+                    "timeout": 60,
+                    "retry": 10,
+                    "retry_interval": 3
+                }
+            ],
+            "terminate_on_finish": ["database"]
+        }
+    ],
+    
+    "rubrics": [
+        {
+            "rubric_id": "correctness",
+            "name": "Query Result Correctness",
+            "type": "test_cases",
+            "max_score": 50,
+            "container": "submission"
+        },
+        {
+            "rubric_id": "query_latency",
+            "name": "Query Latency Performance",
+            "type": "performance_benchmark",
+            "max_score": 30,
+            "container": "submission"
+        },
+        {
+            "rubric_id": "resource_efficiency",
+            "name": "Storage Efficiency",
+            "type": "resource_usage",
+            "max_score": 10,
+            "container": "submission"
+        }
+    ]
+}
+        </div>
+        
+        <h5 style="margin-top: 20px;">Custom vs Standard Problems</h5>
+        <table class="table table-sm table-bordered" style="background-color: white; margin-top: 10px;">
+            <thead>
+                <tr>
+                    <th style="width: 30%;">Feature</th>
+                    <th style="width: 35%;">Custom Problem<br><small>(with config.json + containers)</small></th>
+                    <th style="width: 35%;">Standard Problem<br><small>(traditional DOMjudge)</small></th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>Detection</strong></td>
+                    <td>✅ Automatic (config.json with containers array)</td>
+                    <td>✅ Traditional problem.yaml format</td>
+                </tr>
+                <tr>
+                    <td><strong>Evaluation</strong></td>
+                    <td>🚀 Multi-container orchestration via custom judgehost</td>
+                    <td>Standard DOMjudge judges</td>
+                </tr>
+                <tr>
+                    <td><strong>Architecture</strong></td>
+                    <td>📦 Multiple containers with dependencies (database, submission, tester)</td>
+                    <td>Single execution environment</td>
+                </tr>
+                <tr>
+                    <td><strong>Hooks</strong></td>
+                    <td>✅ Pre/Post/Periodic hooks per container</td>
+                    <td>Standard test cases</td>
+                </tr>
+                <tr>
+                    <td><strong>Scoring</strong></td>
+                    <td>📊 Rubric-based (multi-criteria, automated)</td>
+                    <td>Pass/Fail or Points</td>
+                </tr>
+                <tr>
+                    <td><strong>Project Types</strong></td>
+                    <td>database, nodejs-api, python-ml, etc.</td>
+                    <td>Standard competitive programming</td>
+                </tr>
+                <tr>
+                    <td><strong>Stage Configs</strong></td>
+                    <td>✅ stage1.config.json (build), stage2.config.json (evaluation)</td>
+                    <td>❌ Not applicable</td>
+                </tr>
+            </tbody>
+        </table>
+        
+        <h5 style="margin-top: 20px;">Supported Project Types</h5>
+        <ul>
+            <li><strong>database</strong> - SQL query optimization, database design challenges</li>
+            <li><strong>nodejs-api</strong> - RESTful API development tasks</li>
+            <li><strong>python-ml</strong> - Machine learning projects</li>
+            <li><strong>react-app</strong> - React application development</li>
+            <li><strong>full-stack</strong> - Full-stack web applications</li>
+            <li><strong>custom</strong> - Generic custom evaluation</li>
+        </ul>
+        
+        <h5 style="margin-top: 20px;">Key Concepts</h5>
+        <ul>
+            <li><strong>Containers</strong> - Isolated Docker environments (e.g., database server, submission evaluator)</li>
+            <li><strong>Stages</strong> - Two-phase execution:
+                <ul>
+                    <li><strong>Stage 1</strong> - Problem image build (no network, install dependencies)</li>
+                    <li><strong>Stage 2</strong> - Submission evaluation (internal network, run tests)</li>
+                </ul>
+            </li>
+            <li><strong>Hooks</strong> - Lifecycle scripts executed by judgehost:
+                <ul>
+                    <li><strong>Pre hooks</strong> - Run before submission starts (setup, initialization)</li>
+                    <li><strong>Post hooks</strong> - Run after submission starts (testing, evaluation)</li>
+                    <li><strong>Periodic hooks</strong> - Run continuously (monitoring, health checks)</li>
+                </ul>
+            </li>
+            <li><strong>Rubrics</strong> - Evaluation criteria with scores (correctness, performance, efficiency)</li>
+            <li><strong>Dependencies</strong> - Containers can depend on others (e.g., submission depends on database being healthy)</li>
+        </ul>
+        
+        <h5 style="margin-top: 20px;">Tips & Best Practices</h5>
+        <ul>
+            <li>✅ Test packages locally using the test scripts (e.g., <code>test-database-container.sh</code>)</li>
+            <li>✅ Use descriptive problem IDs and container IDs (e.g., <code>sql-optimization</code>, <code>database</code>, <code>submission</code>)</li>
+            <li>✅ Define health checks for service containers (database, API servers)</li>
+            <li>✅ Set appropriate resource limits in stage configs (CPU, memory, timeout)</li>
+            <li>✅ Use container dependencies with health check conditions (<code>condition: "healthy"</code>)</li>
+            <li>✅ Organize hooks by execution order using numeric prefixes (01_, 02_, 03_)</li>
+            <li>✅ Include README.md with clear problem description and evaluation criteria</li>
+            <li>✅ Test Docker images build successfully before packaging</li>
+            <li>✅ Write rubric results to <code>/out/rubric_&lt;rubric_id&gt;.json</code> in post hooks</li>
+            <li>❌ Don't upload packages larger than 100MB</li>
+            <li>❌ Don't use absolute paths in stage configs or hooks</li>
+            <li>❌ Don't leave config.json or stage configs empty or invalid</li>
+            <li>❌ Don't forget to mark which container accepts the submission (<code>accepts_submission: true</code>)</li>
+        </ul>
+        
+        <div style="margin-top: 20px; padding: 10px; background-color: #fff3cd; border: 1px solid #ffc107; border-radius: 4px;">
+            <strong>⚠️ Important Notes:</strong>
+            <ul style="margin-bottom: 5px; margin-top: 5px;">
+                <li>Make sure the custom judgehost is running and properly configured before uploading custom problems</li>
+                <li>Standard DOMjudge problems (without multi-container config.json) will work without the custom judgehost</li>
+                <li>All containers must have a Dockerfile at the path specified in <code>dockerfile_path</code></li>
+                <li>Stage configs (stage1.config.json, stage2.config.json) are required for each container</li>
+                <li>Hooks are executed by the judgehost using <code>docker exec</code> - they are not autonomous</li>
+                <li>Package structure is case-sensitive - use lowercase for directory names</li>
+            </ul>
+        </div>
+    </div>
+
+    {# Additional Help Section #}
+    <div class="doc-section" style="margin-top: 20px;">
+        <h4>🆘 Need Help?</h4>
+        <ul style="margin-bottom: 0;">
+            <li><strong>Full Documentation:</strong> See <code>_tasks/PROBLEM_UPLOAD_USER_GUIDE.md</code></li>
+            <li><strong>API Reference:</strong> See <code>_tasks/API_DOCUMENTATION.md</code></li>
+            <li><strong>Testing Guide:</strong> See <code>_tasks/TESTING_GUIDE.md</code></li>
+            <li><strong>Deployment Guide:</strong> See <code>_tasks/DEPLOYMENT_GUIDE.md</code></li>
+        </ul>
+    </div>
+
+{% endblock %}

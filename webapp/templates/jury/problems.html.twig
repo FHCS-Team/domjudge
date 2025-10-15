@@ -29,6 +29,7 @@
         <p class="mt-4">
             {% include 'jury/partials/_delete_button.html.twig' with {'entities': problems_current} %}
             {{ button(path('jury_problem_add'), 'Add new problem', 'primary', 'plus') }}
+            {{ button(path('jury_problem_add_package'), 'Add problem package', 'success', 'file-archive') }}
             {{ button(path('jury_import_export', {'_fragment':'problemarchive'}), 'Import problem', 'primary', 'upload') }}
         </p>
     {% endif %}
