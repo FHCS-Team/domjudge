@@ -1887,7 +1887,6 @@ class JudgehostController extends AbstractFOSRestController
                     ]
                 )
             ),
-            new OA\Response(response: 400, description: 'Invalid request data'),
             new OA\Response(response: 404, description: 'Submission or judgehost not found'),
         ]
     )]
