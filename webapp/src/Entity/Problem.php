@@ -134,6 +134,29 @@ class Problem extends BaseApiEntity implements
     #[Serializer\Exclude]
     private ?string $project_type = null;
 
+    #[ORM\Column(
+        type: 'text',
+        nullable: true,
+        options: ['comment' => 'Path to the problem package file on the server']
+    )]
+    #[Serializer\Exclude]
+    private ?string $package_path = null;
+
+    #[ORM\Column(
+        nullable: true,
+        options: ['comment' => 'Package type: file, url, git']
+    )]
+    #[Serializer\Exclude]
+    private ?string $package_type = null;
+
+    #[ORM\Column(
+        type: 'text',
+        nullable: true,
+        options: ['comment' => 'Original package URL or git repository']
+    )]
+    #[Serializer\Exclude]
+    private ?string $package_source = null;
+
     // These types are encoded as bitset - if you add a new type, use the next power of 2.
     public const TYPE_PASS_FAIL = 1;
     public const TYPE_SCORING = 2;
@@ -775,5 +798,38 @@ class Problem extends BaseApiEntity implements
     public function getProjectType(): ?string
     {
         return $this->project_type;
+    }
+
+    public function setPackagePath(?string $packagePath): Problem
+    {
+        $this->package_path = $packagePath;
+        return $this;
+    }
+
+    public function getPackagePath(): ?string
+    {
+        return $this->package_path;
+    }
+
+    public function setPackageType(?string $packageType): Problem
+    {
+        $this->package_type = $packageType;
+        return $this;
+    }
+
+    public function getPackageType(): ?string
+    {
+        return $this->package_type;
+    }
+
+    public function setPackageSource(?string $packageSource): Problem
+    {
+        $this->package_source = $packageSource;
+        return $this;
+    }
+
+    public function getPackageSource(): ?string
+    {
+        return $this->package_source;
     }
 }
