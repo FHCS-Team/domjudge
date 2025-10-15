@@ -15,6 +15,7 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
+use Symfony\Component\Form\FormError;
 
 #[IsGranted('ROLE_ADMIN')]
 #[Route(path: '/jury/problem-rubrics')]
@@ -86,7 +87,7 @@ class ProblemRubricController extends AbstractController
         $attachment->setProblem($problem);
         $form = $this->createForm(ProblemAttachmentType::class, $attachment);
         $form->handleRequest($request);
-        if ($form->isSubmitted() && $form->isValid()) {
+        if ($form->isSubmitted()) {
             $customType = $form->get('type_custom')->getData();
             if ($customType) {
                 $attachment->setType($customType);
@@ -100,10 +101,34 @@ class ProblemRubricController extends AbstractController
                 $attachment->setContent($content);
                 $attachment->setMimeType($file->getMimeType());
             }
-            $this->em->persist($attachment);
-            $this->em->flush();
-            $this->addFlash('success', 'Attachment added.');
-            return $this->redirectToRoute('jury_problem_attachment_list_for_problem', ['problemId' => $problemId]);
+
+            // Defensive validation - ensure a type is provided
+            if (!$attachment->getType() || $attachment->getType() === '') {
+                $form->get('type')->addError(new FormError('Please select a type or enter a custom type.'));
+            }
+
+            // Ensure mime type is set to satisfy migration NOT NULL constraint
+            if (!$attachment->getMimeType()) {
+                $attachment->setMimeType('application/octet-stream');
+            }
+
+            if ($form->isValid()) {
+                try {
+                    $this->em->persist($attachment);
+                    $this->em->flush();
+                } catch (\Doctrine\DBAL\Exception\DriverException $e) {
+                    // Friendly guidance for missing-column issues which occur when
+                    // migrations haven't been applied. Surface the DB message but
+                    // point to the migration command.
+                    $this->addFlash('danger', 'Database error while saving attachment: ' . $e->getMessage() . '. Try running doctrine migrations: "bin/console doctrine:migrations:migrate"');
+                    return $this->render('jury/problem_attachment/add_for_problem.html.twig', [
+                        'form' => $form->createView(),
+                        'problem' => $problem,
+                    ]);
+                }
+                $this->addFlash('success', 'Attachment added.');
+                return $this->redirectToRoute('jury_problem_attachment_list_for_problem', ['problemId' => $problemId]);
+            }
         }
         return $this->render('jury/problem_attachment/add_for_problem.html.twig', [
             'form' => $form->createView(),
@@ -127,7 +152,7 @@ class ProblemRubricController extends AbstractController
         $attachment->setRubric($rubric);
         $form = $this->createForm(ProblemAttachmentType::class, $attachment);
         $form->handleRequest($request);
-        if ($form->isSubmitted() && $form->isValid()) {
+        if ($form->isSubmitted()) {
             $customType = $form->get('type_custom')->getData();
             if ($customType) {
                 $attachment->setType($customType);
@@ -141,10 +166,31 @@ class ProblemRubricController extends AbstractController
                 $attachment->setContent($content);
                 $attachment->setMimeType($file->getMimeType());
             }
-            $this->em->persist($attachment);
-            $this->em->flush();
-            $this->addFlash('success', 'Attachment added to rubric.');
-            return $this->redirectToRoute('jury_problem_rubric_list_for_problem', ['problemId' => $problemId]);
+
+            // Defensive validation - ensure a type is provided
+            if (!$attachment->getType() || $attachment->getType() === '') {
+                $form->get('type')->addError(new FormError('Please select a type or enter a custom type.'));
+            }
+
+            if (!$attachment->getMimeType()) {
+                $attachment->setMimeType('application/octet-stream');
+            }
+
+            if ($form->isValid()) {
+                try {
+                    $this->em->persist($attachment);
+                    $this->em->flush();
+                } catch (\Doctrine\DBAL\Exception\DriverException $e) {
+                    $this->addFlash('danger', 'Database error while saving attachment: ' . $e->getMessage() . '. Try running doctrine migrations: "bin/console doctrine:migrations:migrate"');
+                    return $this->render('jury/problem_attachment/add_for_problem.html.twig', [
+                        'form' => $form->createView(),
+                        'problem' => $problem,
+                        'rubric' => $rubric,
+                    ]);
+                }
+                $this->addFlash('success', 'Attachment added to rubric.');
+                return $this->redirectToRoute('jury_problem_rubric_list_for_problem', ['problemId' => $problemId]);
+            }
         }
         return $this->render('jury/problem_attachment/add_for_problem.html.twig', [
             'form' => $form->createView(),
@@ -172,7 +218,7 @@ class ProblemRubricController extends AbstractController
         $form = $this->createForm(ProblemAttachmentType::class, $attachment);
         $form->handleRequest($request);
 
-        if ($form->isSubmitted() && $form->isValid()) {
+        if ($form->isSubmitted()) {
             $customType = $form->get('type_custom')->getData();
             if ($customType) {
                 $attachment->setType($customType);
@@ -186,20 +232,60 @@ class ProblemRubricController extends AbstractController
                 $attachment->setContent($content);
                 $attachment->setMimeType($file->getMimeType());
             }
-            $this->em->persist($attachment);
-            $this->em->flush();
-            $this->addFlash('success', 'Attachment added to rubric.');
-            return $this->redirectToRoute('jury_rubric_attachments', ['problemId' => $problemId, 'rubricId' => $rubricId]);
+
+            // Defensive validation - ensure a type is provided
+            if (!$attachment->getType() || $attachment->getType() === '') {
+                $form->get('type')->addError(new FormError('Please select a type or enter a custom type.'));
+            }
+
+            if (!$attachment->getMimeType()) {
+                $attachment->setMimeType('application/octet-stream');
+            }
+
+            if ($form->isValid()) {
+                try {
+                    $this->em->persist($attachment);
+                    $this->em->flush();
+                } catch (\Doctrine\DBAL\Exception\DriverException $e) {
+                    $this->addFlash('danger', 'Database error while saving attachment: ' . $e->getMessage() . '. Try running doctrine migrations: "bin/console doctrine:migrations:migrate"');
+                    return $this->render('extensions_plugin/rubric_attachments.html.twig', [
+                        'form' => $form->createView(),
+                        'problem' => $problem,
+                        'rubric' => $rubric,
+                        'attachments' => $attachments,
+                        'contest' => $contest,
+                    ]);
+                }
+                $this->addFlash('success', 'Attachment added to rubric.');
+                return $this->redirectToRoute('jury_rubric_attachments', ['problemId' => $problemId, 'rubricId' => $rubricId]);
+            }
         }
 
         $attachments = $this->em->getRepository(ProblemAttachment::class)->findBy(['problem' => $problem, 'rubric' => $rubric]);
+
+        // Determine a contest context if this problem is part of any contest via ContestProblem
+        $contest = null;
+        try {
+            if (method_exists($problem, 'getContestProblems')) {
+                $cps = $problem->getContestProblems();
+                if ($cps && count($cps) > 0) {
+                    $first = $cps->first();
+                    if ($first && method_exists($first, 'getContest')) {
+                        $contest = $first->getContest();
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            // fall back to null if anything goes wrong
+            $contest = null;
+        }
 
         return $this->render('extensions_plugin/rubric_attachments.html.twig', [
             'problem' => $problem,
             'rubric' => $rubric,
             'attachments' => $attachments,
             'attachmentForm' => $form->createView(),
-            'contest' => $problem->getContest() ?? null,
+            'contest' => $contest,
         ]);
     }
 

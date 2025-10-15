@@ -58,7 +58,8 @@ class ProblemDisplayDataType extends AbstractType
                 'attr' => ['placeholder' => 'https://example.com/file.zip', 'class' => 'js-attachmentlink-input'],
             ]);
 
-        // Visibility/scope of the problem attachment (stored on problem_attachment.type in DB)
+        // Visibility/scope of the problem attachment (stored on problem_attachment.visibility in DB)
+        // Added an option for participant-visible attachments as well as private
         $builder->add('attachmentScope', ChoiceType::class, [
             'required' => false,
             'mapped' => false,
@@ -66,6 +67,9 @@ class ProblemDisplayDataType extends AbstractType
             'choices' => [
                 'Public' => 'public',
                 'Hidden' => 'hidden',
+                'Participant' => 'participant',
+                'Other' => 'other',
+                'Private' => 'private',
             ],
             'placeholder' => 'Select visibility',
         ]);

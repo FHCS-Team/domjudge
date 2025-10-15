@@ -1,32 +1,12 @@
 <img align="right" width="96px" alt="DOMjudge-logo" src="./doc/logos/DOMjudgelogo-with-white-background.png">
 
-DOMjudge with Hackathon Extensions
-----------------------------------
-
-> **Note**: This is a fork of [DOMjudge version 9](https://github.com/DOMjudge/domjudge) with custom hackathon extensions.
-> 
-> **Original Project**: [DOMjudge](https://www.domjudge.org/) - Programming Contest Jury System  
-> **Fork Purpose**: Extended functionality for hackathon-style competitions  
-> **Base Version**: DOMjudge 9.x
-
-### Hackathon Extensions Added:
-- **Hackathon Toggle**: Enable/disable hackathon mode per contest
-- **Enhanced Team Interface**: Modern card-based problem display
-- **Deliverable Uploads**: Support for ZIP files, documents, and demo links
-- **Manual Rubric Scoring**: Multi-criteria judging system for hackathons
-- **Contest Display Data**: Custom banners, descriptions, and metadata
-- **Problem Display Enhancement**: Rich descriptions with attachments
-- **API Extensions**: Endpoints for hackathon submission management and scoring
-
----
-
 DOMjudge
 --------
 [![pipeline status](https://gitlab.com/DOMjudge/domjudge/badges/main/pipeline.svg)](https://gitlab.com/DOMjudge/domjudge/commits/main)
 [![Coverity Scan Status](https://img.shields.io/coverity/scan/671.svg)](https://scan.coverity.com/projects/domjudge)
 [![CodeQL alerts](https://github.com/DOMjudge/domjudge/actions/workflows/codeql-analysis.yml/badge.svg?branch=main&event=push)](https://github.com/DOMjudge/domjudge/actions/workflows/codeql-analysis.yml)
 
-This is the Programming Contest Jury System "DOMjudge" version 10.0.0DEV
+This is the Programming Contest Jury System "DOMjudge" version 9.0.0
 
 DOMjudge is a system for running a programming contest, like the
 ICPC regional and world championship programming contests.
@@ -67,15 +47,11 @@ https://github.com/DOMjudge/domjudge/wiki
 Copyright & Licensing
 ---------------------
 
-**Original DOMjudge:**  
 DOMjudge is Copyright (c) 2004 - 2025 by the DOMjudge developers and
 all respective contributors. The current DOMjudge developers are Jaap
 Eldering, Nicky Gerritsen, Keith Johnson, Thijs Kinkhorst, Mart
 Pluijmaekers, Michael Vasseur and Tobias Werth; see the manual for
 a complete list of contributors.
-
-**Hackathon Extensions:**  
-The hackathon extensions in this fork are additional modifications built on top of the original DOMjudge codebase. This fork maintains compatibility with the original DOMjudge GPL license while adding new functionality specifically designed for hackathon competitions.
 
 DOMjudge, including its documentation, is free software; you can
 redistribute it and/or modify it under the terms of the GNU General

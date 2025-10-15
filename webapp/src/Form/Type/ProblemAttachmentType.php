@@ -24,15 +24,27 @@ class ProblemAttachmentType extends AbstractType
                 'label' => 'Filename',
                 'required' => true,
             ])
-            ->add('type', ChoiceType::class, [
-                'label' => 'Type',
+            ->add('visibility', ChoiceType::class, [
+                'label' => 'Visibility',
                 'required' => false,
                 'choices' => [
                     'Public' => 'public',
                     'Hidden' => 'hidden',
+                    'Participant' => 'participant',
+                    'Other' => 'other',
+                    'Private' => 'private',
+                ],
+                'placeholder' => 'Select visibility',
+            ])
+            ->add('type', ChoiceType::class, [
+                'label' => 'Type',
+                'required' => false,
+                'choices' => [
                     'Pre' => 'pre',
                     'Post' => 'post',
                     'Script' => 'script',
+                    'Example' => 'example',
+                    'Template' => 'template',
                     'Other (enter below)' => '',
                 ],
                 'placeholder' => 'Select or enter type',

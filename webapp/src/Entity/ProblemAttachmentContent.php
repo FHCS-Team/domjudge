@@ -18,7 +18,6 @@ class ProblemAttachmentContent
      * reverse of this relation will always be loaded. See the commit message of commit
      * 9e421f96691ec67ed62767fe465a6d8751edd884 for a more elaborate explanation.
      */
-
     #[ORM\Id]
     #[ORM\ManyToOne(inversedBy: 'content')]
     #[ORM\JoinColumn(name: 'attachmentid', referencedColumnName: 'attachmentid', onDelete: 'CASCADE')]
@@ -27,60 +26,13 @@ class ProblemAttachmentContent
     #[ORM\Column(type: 'blobtext', options: ['comment' => 'Attachment content'])]
     private string $content;
 
-    #[ORM\Column(type: 'string', length: 32, nullable: true, options: ['comment' => 'Attachment content type (pre, post, etc)'])]
-    private ?string $type = null;
+    // content type and url are stored on the parent ProblemAttachment for
+    // simplicity (link vs file is tracked on the attachment row). Do not
+    // duplicate these fields here to avoid confusion and extra joins.
 
-    #[ORM\Column(type: 'string', length: 255, nullable: true, options: ['comment' => 'Attachment content URL'])]
-    private ?string $url = null;
-
-    #[ORM\Column(type: 'text', nullable: true, options: ['comment' => 'Attachment content description'])]
-    private ?string $description = null;
-
-    #[ORM\Column(type: 'json', nullable: true, options: ['comment' => 'Flexible meta data for attachment content'])]
-    private $meta_data = null;
-
-    #[ORM\Column(name: 'is_executable', type: 'boolean', options: ['comment' => 'Whether this file gets an executable bit.', 'default' => 0])]
+    #[ORM\Column(options: ['comment' => 'Whether this file gets an executable bit.', 'default' => 0])]
     #[Serializer\Exclude]
     private bool $isExecutable = false;
-    public function getType(): ?string
-    {
-        return $this->type;
-    }
-    public function setType(?string $type): self
-    {
-        $this->type = $type;
-        return $this;
-    }
-
-    public function getUrl(): ?string
-    {
-        return $this->url;
-    }
-    public function setUrl(?string $url): self
-    {
-        $this->url = $url;
-        return $this;
-    }
-
-    public function getDescription(): ?string
-    {
-        return $this->description;
-    }
-    public function setDescription(?string $description): self
-    {
-        $this->description = $description;
-        return $this;
-    }
-
-    public function getMetaData()
-    {
-        return $this->meta_data;
-    }
-    public function setMetaData($meta_data): self
-    {
-        $this->meta_data = $meta_data;
-        return $this;
-    }
 
     public function getAttachment(): ProblemAttachment
     {
@@ -105,6 +57,7 @@ class ProblemAttachmentContent
 
         return $this;
     }
+    // ... no type/url accessors here by design
 
     public function setIsExecutable(bool $isExecutable): ProblemAttachmentContent
     {

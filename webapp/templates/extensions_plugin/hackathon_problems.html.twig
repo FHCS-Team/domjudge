@@ -26,54 +26,110 @@
 
 
     <div class="card mb-4">
-        <div class="card-header">Quick Add Problem</div>
+        <div class="card-header">Create Problem</div>
         <div class="card-body">
-            <form method="post" action="{{ path('jury_hackathon_quickadd_problem', {'contestId': contest.cid}) }}" enctype="multipart/form-data">
+            <p class="mb-2">Create a new problem in the problem bank. You can later add it to this contest from the "Available problems" list.</p>
+            <form method="post" action="{{ path('jury_hackathon_quickadd_problem', {'contestId': contest.cid}) }}">
                 <div class="mb-2">
-                    <label for="quickadd-shortname" class="form-label">Short name</label>
+                    <label for="quickadd-shortname" class="form-label">Short name (optional)</label>
                     <input type="text" class="form-control" id="quickadd-shortname" name="shortname" placeholder="e.g. P1">
                 </div>
                 <div class="mb-2">
                     <label for="quickadd-name" class="form-label">Name</label>
                     <input type="text" class="form-control" id="quickadd-name" name="name" placeholder="e.g. Hello World">
                 </div>
-                <button type="submit" class="btn btn-primary">Quick Add Problem</button>
+                <button type="submit" class="btn btn-primary">Create Problem</button>
             </form>
         </div>
     </div>
 
-    <h3>Problem List</h3>
-    {% if problems is empty %}
-        <div class="alert alert-secondary">No problems added yet.</div>
+    <h3>Problems in this contest</h3>
+    {% if contestProblems is empty %}
+        <div class="alert alert-secondary">No problems added to this contest yet.</div>
     {% else %}
         {% set table_fields = {
             'shortname': {'title': 'Short name', 'sort': true},
             'name': {'title': 'Name', 'sort': true},
             'timelimit': {'title': 'Timelimit', 'sort': true},
-            'memlimit': {'title': 'Memory limit', 'sort': true},
+            'memlimit': {'title': 'Memory limit', 'sort': true}
         } %}
         {% set problems_table = [] %}
-        {% for cp in problems %}
+        {% for cp in contestProblems %}
+            {# Actions: first edit display data, then edit core problem, then remove (as HTML form) #}
+            {% set action_edit_display = {
+                'icon': 'edit',
+                'title': 'Edit Display Data',
+                'link': path('jury_hackathon_edit_problem_display', {'contestId': contest.cid, 'problemId': cp.problem.probid})
+            } %}
+            {% set action_edit_core = {
+                'icon': 'external-link-alt',
+                'title': 'Edit Problem',
+                'link': path('jury_problem_edit', {'probId': cp.problem.probid})
+            } %}
+            {% set action_remove_html = '<form method="post" action="' ~ path('jury_hackathon_remove_problem', {'contestId': contest.cid, 'problemId': cp.problem.probid}) ~ '" style="display:inline" onsubmit="return confirm(\'Remove problem ' ~ cp.problem.name|e('js') ~ ' from contest?\');">' ~
+                                      '<input type="hidden" name="_token" value="' ~ csrf_token('remove_problem_' ~ cp.problem.probid) ~ '" />' ~
+                                      '<button class="btn btn-link p-0 text-danger" title="Remove from contest"><i class="fas fa-trash-alt"></i></button>' ~
+                                      '</form>' %}
             {% set row = {
                 'data': {
                     'shortname': {'value': cp.shortname},
                     'name': {'value': cp.problem.name},
                     'timelimit': {'value': cp.problem.timelimit ~ ' s'},
-                    'memlimit': {'value': (cp.problem.memlimit is not null ? (cp.problem.memlimit // 1024) ~ ' MB' : '256 MB')},
+                    'memlimit': {'value': (cp.problem.memlimit is not null ? (cp.problem.memlimit // 1024) ~ ' MB' : '256 MB')}
                 },
-                'actions': [
-                    {
-                        'icon': 'edit',
-                        'title': 'Edit Display Data',
-                        'link': path('jury_hackathon_edit_problem_display', {'contestId': contest.cid, 'problemId': cp.problem.probid})
-                    }
-                ],
-                'link': null,
+                'actions': [ action_edit_display, action_edit_core, { 'html': action_remove_html } ],
+                'link': path('jury_hackathon_edit_problem_display', {'contestId': contest.cid, 'problemId': cp.problem.probid}),
                 'cssclass': ''
             } %}
             {% set problems_table = problems_table | merge([row]) %}
         {% endfor %}
-        {{ macros.table(problems_table, table_fields) }}
+    {{ macros.table(problems_table, table_fields, {'full_clickable': true}) }}
+    {% endif %}
+
+    <h3 class="mt-4">Available problems (not yet in this contest)</h3>
+    {% if availableProblems is empty %}
+        <div class="alert alert-secondary">No available problems. Create one above.</div>
+    {% else %}
+        {% set table_fields_avail = {
+            'name': {'title': 'Name', 'sort': true},
+            'timelimit': {'title': 'Timelimit', 'sort': true},
+            'memlimit': {'title': 'Memory limit', 'sort': true},
+            'add': {'title': '', 'sort': false, 'raw': true}
+        } %}
+        {% set avail_table = [] %}
+        {% for p in availableProblems %}
+            {% set add_form = '<form method="post" action="' ~ path('jury_hackathon_add_existing_problem', {'contestId': contest.cid}) ~ '" style="display:inline">' ~
+                              '<input type="hidden" name="problemId" value="' ~ p.probid ~ '" />' ~
+                              '<input type="hidden" name="_token" value="' ~ csrf_token('add_problem_' ~ p.probid) ~ '" />' ~
+                              '<button class="btn btn-link p-0" title="Add to contest"><i class="fas fa-plus"></i></button>' ~
+                              '</form>' %}
+
+            {% set row = {
+                'data': {
+                    'name': {'value': p.name},
+                    'timelimit': {'value': p.timelimit ~ ' s'},
+                    'memlimit': {'value': (p.memlimit is not null ? (p.memlimit // 1024) ~ ' MB' : '256 MB')},
+                    'add': {'value': add_form}
+                },
+                'actions': [],
+                'link': path('jury_problem_edit', {'probId': p.probid}),
+                'cssclass': ''
+            } %}
+            {% set avail_table = avail_table | merge([row]) %}
+        {% endfor %}
+    {{ macros.table(avail_table, table_fields_avail, {'full_clickable': true}) }}
+        <div class="mt-3">
+            <form id="add-problem-form" method="post" action="{{ path('jury_hackathon_add_existing_problem', {'contestId': contest.cid}) }}">
+                <div class="input-group mb-3">
+                    <select class="form-select" name="problemId" id="select-available-problem">
+                        {% for p in availableProblems %}
+                            <option value="{{ p.probid }}">{{ p.name }} (ID: {{ p.probid }})</option>
+                        {% endfor %}
+                    </select>
+                    <button class="btn btn-primary" type="submit">Add selected problem to contest</button>
+                </div>
+            </form>
+        </div>
     {% endif %}
 </div>
 {% endblock %}

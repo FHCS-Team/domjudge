@@ -159,10 +159,17 @@
 
                         <td>
                             {%- if action %}
+                                {# If the action provides raw HTML (e.g. a form button), render it verbatim. #}
+                                {%- if action.html is defined %}
+                                    {{- action.html | raw -}}
+                                {%- else %}
 
-                                <a {% if action.disabled is defined and action.disabled %}class="disabled"{% endif %} {% if action.link is defined %}href="{{ action.link }}"{% endif %} title="{{ action.title }}" {% if action.ajaxModal is defined and action.ajaxModal %}data-ajax-modal{% endif %}>
-                                    <i class="fas fa-{{ action.icon }}"></i>
-                                </a>
+                                    <a {% if action.disabled is defined and action.disabled %}class="disabled"{% endif %} {% if action.link is defined %}href="{{ action.link }}"{% endif %} title="{{ action.title }}" {% if action.ajaxModal is defined and action.ajaxModal %}data-ajax-modal{% endif %}>
+                                        {%- if action.icon is defined %}
+                                            <i class="fas fa-{{ action.icon }}"></i>
+                                        {%- endif %}
+                                    </a>
+                                {%- endif %}
                             {%- endif %}
 
                         </td>

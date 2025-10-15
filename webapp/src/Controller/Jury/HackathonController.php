@@ -64,7 +64,8 @@ class HackathonController extends BaseController
                         'link' => $this->generateUrl('jury_hackathon_display', ['contestId' => $contest->getCid()]),
                     ],
                 ],
-                'link' => null,
+                // Make the whole row navigable to the display page
+                'link' => $this->generateUrl('jury_hackathon_display', ['contestId' => $contest->getCid()]),
                 'cssclass' => '',
             ];
         }
@@ -243,8 +244,8 @@ class HackathonController extends BaseController
             return $this->redirectToRoute('jury_hackathon');
         }
 
-        // Fetch problems for this contest
-        $problems = $this->em->createQueryBuilder()
+        // Fetch ContestProblem rows for this contest (problems already added to contest)
+        $contestProblems = $this->em->createQueryBuilder()
             ->select('cp', 'p')
             ->from('App\\Entity\\ContestProblem', 'cp')
             ->leftJoin('cp.problem', 'p')
@@ -253,9 +254,21 @@ class HackathonController extends BaseController
             ->orderBy('cp.shortname', 'ASC')
             ->getQuery()->getResult();
 
+        // Fetch Problems that are NOT part of this contest so they can be added
+        $availableProblems = $this->em->createQueryBuilder()
+            ->select('p')
+            ->from('App\\Entity\\Problem', 'p')
+            ->leftJoin('p.contest_problems', 'cp', 'WITH', 'cp.contest = :contest')
+            ->setParameter('contest', $contest)
+            // when left join yields no ContestProblem rows, the alias 'cp' is NULL
+            ->where('cp IS NULL')
+            ->orderBy('p.name', 'ASC')
+            ->getQuery()->getResult();
+
         return $this->render('extensions_plugin/hackathon_problems.html.twig', [
             'contest' => $contest,
-            'problems' => $problems,
+            'contestProblems' => $contestProblems,
+            'availableProblems' => $availableProblems,
         ]);
     }
 
@@ -281,17 +294,13 @@ class HackathonController extends BaseController
         $finalShortname = $shortname !== '' ? $shortname : $autoShortname;
         $finalName = $name !== '' ? $name : $autoName;
 
-        $problem = new \App\Entity\Problem();
-        $problem->setName($finalName);
-        $problem->setTimelimit(2.0);
-        $problem->setMemlimit(262144); // 256 MB default
-        $this->em->persist($problem);
-
-        $contestProblem = new \App\Entity\ContestProblem();
-        $contestProblem->setContest($contest);
-        $contestProblem->setProblem($problem);
-        $contestProblem->setShortname($finalShortname);
-        $this->em->persist($contestProblem);
+    // Create a standalone Problem. The user can add it to the contest from
+    // the "Available problems" table on the UI if desired.
+    $problem = new \App\Entity\Problem();
+    $problem->setName($finalName);
+    $problem->setTimelimit(2.0);
+    $problem->setMemlimit(262144); // 256 MB default
+    $this->em->persist($problem);
 
         // Create ProblemDisplayData
         $displayData = new \App\Entity\ProblemDisplayData();
@@ -313,6 +322,94 @@ class HackathonController extends BaseController
         return $this->redirectToRoute('jury_hackathon_problems', ['contestId' => $contestId]);
     }
 
+    #[Route(path: '/{contestId<\\d+>}/problems/add', name: 'jury_hackathon_add_existing_problem', methods: ['POST'])]
+    public function addExistingProblem(Request $request, int $contestId): Response
+    {
+        $contest = $this->em->getRepository(Contest::class)->find($contestId);
+        if (!$contest) {
+            $this->addFlash('danger', 'Contest not found.');
+            return $this->redirectToRoute('jury_hackathon');
+        }
+
+        $problemId = (int)$request->request->get('problemId', 0);
+        $problem = $this->em->getRepository(\App\Entity\Problem::class)->find($problemId);
+        if (!$problem) {
+            $this->addFlash('danger', 'Problem not found.');
+            return $this->redirectToRoute('jury_hackathon_problems', ['contestId' => $contestId]);
+        }
+
+        // Check if already added
+        $existing = $this->em->getRepository(\App\Entity\ContestProblem::class)->findOneBy([
+            'contest' => $contest,
+            'problem' => $problem,
+        ]);
+        if ($existing) {
+            $this->addFlash('warning', 'Problem is already part of this contest.');
+            return $this->redirectToRoute('jury_hackathon_problems', ['contestId' => $contestId]);
+        }
+
+        // Auto-generate a shortname for this contest problem (P1, P2, ...)
+        $problemCount = $this->em->getRepository(\App\Entity\ContestProblem::class)
+            ->count(['contest' => $contest]);
+        $shortname = 'P' . ($problemCount + 1);
+
+        $contestProblem = new \App\Entity\ContestProblem();
+        $contestProblem->setContest($contest);
+        $contestProblem->setProblem($problem);
+        $contestProblem->setShortname($shortname);
+        $this->em->persist($contestProblem);
+        try {
+            $this->em->flush();
+            $this->addFlash('success', 'Problem added to contest.');
+        } catch (\Throwable $e) {
+            // Likely a unique constraint violation on shortname or similar
+            $this->addFlash('danger', 'Could not add problem to contest: ' . $e->getMessage());
+        }
+        return $this->redirectToRoute('jury_hackathon_problems', ['contestId' => $contestId]);
+    }
+
+    #[Route(path: '/{contestId<\\d+>}/problems/{problemId<\\d+>}/remove', name: 'jury_hackathon_remove_problem', methods: ['POST'])]
+    public function removeProblemFromContest(Request $request, int $contestId, int $problemId): Response
+    {
+        $contest = $this->em->getRepository(Contest::class)->find($contestId);
+        if (!$contest) {
+            $this->addFlash('danger', 'Contest not found.');
+            return $this->redirectToRoute('jury_hackathon');
+        }
+
+        // Optional CSRF check if provided
+        $token = $request->request->get('_token');
+        if ($token && !$this->isCsrfTokenValid('remove_problem_' . $problemId, $token)) {
+            $this->addFlash('danger', 'Invalid CSRF token.');
+            return $this->redirectToRoute('jury_hackathon_problems', ['contestId' => $contestId]);
+        }
+
+        $problem = $this->em->getRepository(\App\Entity\Problem::class)->find($problemId);
+        if (!$problem) {
+            $this->addFlash('danger', 'Problem not found.');
+            return $this->redirectToRoute('jury_hackathon_problems', ['contestId' => $contestId]);
+        }
+
+        $contestProblem = $this->em->getRepository(\App\Entity\ContestProblem::class)->findOneBy([
+            'contest' => $contest,
+            'problem' => $problem,
+        ]);
+        if (!$contestProblem) {
+            $this->addFlash('warning', 'Problem is not part of this contest.');
+            return $this->redirectToRoute('jury_hackathon_problems', ['contestId' => $contestId]);
+        }
+
+        try {
+            $this->em->remove($contestProblem);
+            $this->em->flush();
+            $this->addFlash('success', 'Problem removed from contest.');
+        } catch (\Throwable $e) {
+            $this->addFlash('danger', 'Failed to remove problem from contest: ' . $e->getMessage());
+        }
+
+        return $this->redirectToRoute('jury_hackathon_problems', ['contestId' => $contestId]);
+    }
+
     #[Route(path: '/{contestId<\\d+>}/problems/{problemId<\\d+>}/attachments/ajax-add', name: 'jury_hackathon_attachment_ajax_add', methods: ['POST'])]
     public function ajaxAddProblemAttachment(Request $request, int $contestId, int $problemId): Response
     {
@@ -321,7 +418,7 @@ class HackathonController extends BaseController
             return $this->json(['success' => false, 'error' => 'Problem not found'], 404);
         }
 
-        $name = trim((string)$request->request->get('attachmentName', '')) ?: $request->files->get('attachmentFile')?->getClientOriginalName() ?? 'attachment';
+        $name = trim((string)$request->request->get('attachmentName', '')) ?: ($request->files->get('attachmentFile')?->getClientOriginalName() ?? 'attachment');
         $scope = $request->request->get('attachmentScope', 'public');
         $contentType = $request->request->get('attachmentContentType', '');
         $link = trim((string)$request->request->get('attachmentLink', '')) ?: null;
@@ -329,65 +426,54 @@ class HackathonController extends BaseController
         $attachment = new \App\Entity\ProblemAttachment();
         $attachment->setProblem($problem);
         $attachment->setName($name);
-        $attachment->setType($scope);
+        $attachment->setVisibility($scope ?: 'public');
 
-        // Some installs may not have the `url` column on problem_attachment.
-        // Check schema first and only set attachment.url if the column exists.
-        $conn = $this->em->getConnection();
-        $attachmentHasUrlColumn = false;
-        try {
-            $cols = $conn->executeQuery('SHOW COLUMNS FROM problem_attachment')->fetchAllAssociative();
-            foreach ($cols as $col) {
-                if (($col['Field'] ?? null) === 'url') {
-                    $attachmentHasUrlColumn = true;
-                    break;
-                }
-            }
-        } catch (\Throwable $e) {
-            // If inspection fails, be conservative and assume the column does not exist
-            $attachmentHasUrlColumn = false;
-        }
-
-        if ($link && $attachmentHasUrlColumn) {
-            $attachment->setUrl($link);
-        }
-
-        // If a file was uploaded, create a content row
         $file = $request->files->get('attachmentFile');
         if ($file instanceof \Symfony\Component\HttpFoundation\File\UploadedFile) {
             $content = new \App\Entity\ProblemAttachmentContent();
             $content->setContent(file_get_contents($file->getRealPath()));
             $content->setAttachment($attachment);
-            $content->setType($contentType ?: null);
             $attachment->setContent($content);
-            $attachment->setMimeType($file->getMimeType());
+            $attachment->setMimeType($file->getMimeType() ?: 'application/octet-stream');
         } elseif ($link) {
-            // If link-only, create a content row with URL
+            // For link attachments we don't store binary content; instead
+            // we record the URL on the ProblemAttachment row and create an
+            // empty content placeholder for the ORM relation.
             $content = new \App\Entity\ProblemAttachmentContent();
             $content->setContent('');
             $content->setAttachment($attachment);
-            $content->setUrl($link);
-            $content->setType($contentType ?: null);
             $attachment->setContent($content);
+            $attachment->setMimeType('application/octet-stream');
+            // store link and type on the attachment row
+            $attachment->setUrl($link);
+            $attachment->setType($contentType ?: 'link');
+        }
+
+        if (!$attachment->getType() || $attachment->getType() === '') {
+            $attachment->setType($contentType ?: ($link ? 'link' : 'file'));
         }
 
         try {
             $this->em->persist($attachment);
             $this->em->flush();
+            $attachmentId = $attachment->getAttachmentid();
         } catch (\Throwable $e) {
-            return $this->json(['success' => false, 'error' => 'Database error: ' . $e->getMessage()], 500);
+            return $this->json([
+                'success' => false,
+                'error' => 'Database error while saving attachment: ' . $e->getMessage()
+            ], 500);
         }
 
-        // Construct a safe, relative preview URL for the attachment. Do not rely on a
-        // specific route name that may not exist in some installs. The API attachment
-        // route is normally mounted under /contests/{cid}/problems/{id}/attachment/{filename}.
-        $contestIdForUrl = $problem->getContest() ? $problem->getContest()->getCid() : null;
+        $contestIdForUrl = null;
+        try {
+            $contestIdForUrl = $problem->getContest() ? $problem->getContest()->getCid() : null;
+        } catch (\Throwable $e) {
+            $contestIdForUrl = null;
+        }
         $problemIdForUrl = $problem->getExternalid() ?? (string)$problem->getProbid();
         if ($contestIdForUrl) {
             $previewUrl = '/contests/' . rawurlencode((string)$contestIdForUrl) . '/problems/' . rawurlencode($problemIdForUrl) . '/attachment/' . rawurlencode($attachment->getName());
         } else {
-            // Fallback: use a minimal filename-based URL under /attachments – this may need
-            // adjustment depending on your routing; it's safer than throwing a 500.
             $previewUrl = '/attachments/' . rawurlencode($attachment->getName());
         }
 
@@ -396,6 +482,7 @@ class HackathonController extends BaseController
             'attachment' => [
                 'attachmentid' => $attachment->getAttachmentid(),
                 'name' => $attachment->getName(),
+                'visibility' => $attachment->getVisibility(),
                 'type' => $attachment->getType(),
                 'url' => $attachment->getUrl() ?: $previewUrl,
                 'contentType' => $contentType,
@@ -443,11 +530,6 @@ class HackathonController extends BaseController
             $this->addFlash('success', 'Rubric added.');
             return $this->redirectToRoute('jury_hackathon_edit_problem_display', ['contestId' => $contestId, 'problemId' => $problemId]);
         }
-
-        // Attachment removal and metadata are handled in dedicated controllers/tables in this deployment.
-        // Load attachments for preview and listing. Some installs may have an older
-        // schema missing newer columns (e.g. `url`). Try the ORM call and fall
-        // back to a safe raw query that only selects existing columns.
         try {
             $attachments = $this->em->getRepository(\App\Entity\ProblemAttachment::class)->findBy(['problem' => $problem]);
         } catch (\Throwable $e) {

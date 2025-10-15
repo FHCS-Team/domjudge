@@ -17,6 +17,8 @@
 <div class="container mt-4">
     <h1>Edit Display Data for <b>{{ problem.name }}</b></h1>
     <a href="{{ path('jury_hackathon_problems', {'contestId': contest.cid}) }}" class="btn btn-secondary mb-3">&larr; Back to Problem List</a>
+    {# Edit Problem navigation: go to core problem edit page #}
+    <a href="{{ path('jury_problem_edit', {'probId': problem.probid}) }}" class="btn btn-primary ms-2 mb-3">Edit Problem</a>
     {# Rubric and attachment management will be embedded below #}
     <div class="row">
         <div class="col-md-7">
@@ -48,6 +50,11 @@
                     {# metadata moved to dedicated tables; field removed from form #}
                     <div class="mb-3">
                         {{ form_row(form.attachmentScope) }}
+                        <div class="form-text">
+                            Visibility controls who can see this attachment:
+                            <strong>Public</strong> = everyone, <strong>Participant</strong> = contestants,
+                            <strong>Hidden</strong> = jury-only, <strong>Private</strong> = server-only.
+                        </div>
                     </div>
                     <div class="mb-3">
                         {{ form_row(form.attachmentContentType) }}
@@ -65,8 +72,21 @@
                             {{ form_widget(form.attachmentLink) }}
                             <div class="form-text">Paste a URL to add as an attachment (e.g. a file, image, or resource link).</div>
                         </div>
+                        {# Custom content type input (shown when user picks 'other' in type select) #}
+                        <div id="attachment-contenttype-other-row" class="mb-3" style="display:none;">
+                            <label class="form-label">Other content type (MIME)</label>
+                            <input type="text" name="problem_display_data[attachmentContentTypeOther]" id="attachmentContentTypeOther" class="form-control" placeholder="e.g. application/zip or image/svg+xml">
+                            <div class="form-text">Enter a custom MIME content type when 'Other' is selected.</div>
+                        </div>
+
+                        {# Custom visibility input (shown when user picks 'other' in visibility select) #}
+                        <div id="attachment-scope-other-row" class="mb-3" style="display:none;">
+                            <label class="form-label">Custom visibility</label>
+                            <input type="text" name="problem_display_data[attachmentScopeOther]" id="attachmentScopeOther" class="form-control" placeholder="Enter custom visibility (e.g. participants-only)">
+                            <div class="form-text">Provide a custom visibility label when required.</div>
+                        </div>
                         <div class="mb-3">
-                            <button id="ajax-attachment-submit" class="btn btn-primary">Add Attachment (AJAX)</button>
+                            <button id="ajax-attachment-submit" class="btn btn-primary">Add Attachment</button>
                             <div id="ajax-attachment-feedback" class="mt-2"></div>
                         </div>
                     </div>
@@ -207,11 +227,16 @@
         var contentTypeSelect = document.querySelector('select[name="problem_display_data[attachmentContentType]"]');
         var fileRow = document.getElementById('attachment-file-row');
         var linkRow = document.getElementById('attachment-link-row');
+        var contentTypeOtherRow = document.getElementById('attachment-contenttype-other-row');
+        var contentTypeOtherInput = document.getElementById('attachmentContentTypeOther');
+        var scopeOtherRow = document.getElementById('attachment-scope-other-row');
+        var scopeOtherInput = document.getElementById('attachmentScopeOther');
 
         if (!contentTypeSelect || !fileRow || !linkRow) return;
 
         function updateAttachmentInputs() {
             var val = contentTypeSelect.value;
+            // Show link input only for explicit 'link' type
             if (val === 'link') {
                 fileRow.style.display = 'none';
                 linkRow.style.display = '';
@@ -219,12 +244,36 @@
                 fileRow.style.display = '';
                 linkRow.style.display = 'none';
             }
+
+            // Show custom content-type input when user selects 'other'
+            if (val === 'other') {
+                contentTypeOtherRow.style.display = '';
+            } else {
+                contentTypeOtherRow.style.display = 'none';
+            }
+
+            // If there's an explicit MIME like 'image/*' or 'video/*' we keep file input visible
         }
 
         // initialize
         updateAttachmentInputs();
         // listen for changes
         contentTypeSelect.addEventListener('change', updateAttachmentInputs);
+        // Also toggle custom visibility input when the scope select changes
+        if (scopeOtherRow && scopeOtherInput && typeof scopeOtherInput !== 'undefined') {
+            var scopeSelectElement = document.querySelector('select[name="problem_display_data[attachmentScope]"]');
+            if (scopeSelectElement) {
+                function updateScopeOther() {
+                    if (scopeSelectElement.value === 'other') {
+                        scopeOtherRow.style.display = '';
+                    } else {
+                        scopeOtherRow.style.display = 'none';
+                    }
+                }
+                updateScopeOther();
+                scopeSelectElement.addEventListener('change', updateScopeOther);
+            }
+        }
     });
 </script>
 <script>
@@ -244,18 +293,36 @@
             var linkInput = document.querySelector('input[name="problem_display_data[attachmentLink]"]');
             var scopeSelect = document.querySelector('select[name="problem_display_data[attachmentScope]"]');
             var contentTypeSelect = document.querySelector('select[name="problem_display_data[attachmentContentType]"]');
+            var contentTypeOther = document.getElementById('attachmentContentTypeOther');
+            var scopeOther = document.getElementById('attachmentScopeOther');
 
             if (fileInput && fileInput.files && fileInput.files.length > 0) {
                 fd.append('attachmentFile', fileInput.files[0]);
+                fd.append('attachmentName', fileInput.files[0].name);
             }
             if (linkInput && linkInput.value) {
                 fd.append('attachmentLink', linkInput.value);
+                if (!fd.has('attachmentName')) {
+                    // Use the link as the name if no file was uploaded
+                    fd.append('attachmentName', linkInput.value);
+                }
             }
+            // Handle custom scope if provided
             if (scopeSelect) {
-                fd.append('attachmentScope', scopeSelect.value);
+                var scopeVal = scopeSelect.value;
+                if (scopeVal === 'other' && scopeOther && scopeOther.value) {
+                    scopeVal = scopeOther.value;
+                }
+                fd.append('attachmentScope', scopeVal);
             }
+
+            // Handle content type and custom other
             if (contentTypeSelect) {
-                fd.append('attachmentContentType', contentTypeSelect.value);
+                var ct = contentTypeSelect.value;
+                if (ct === 'other' && contentTypeOther && contentTypeOther.value) {
+                    ct = contentTypeOther.value;
+                }
+                fd.append('attachmentContentType', ct);
             }
 
             var url = '{{ path('jury_hackathon_attachment_ajax_add', {'contestId': contest.cid, 'problemId': problem.probid}) }}';
@@ -287,11 +354,21 @@
                     span.innerText = a.contentType;
                     li.appendChild(span);
                 }
+                if (a.visibility) {
+                    var vspan = document.createElement('span');
+                    // Use info for visibility to match preview badges above
+                    vspan.className = 'badge bg-info ms-2';
+                    // Capitalize nicely if it's a single word
+                    vspan.innerText = (typeof a.visibility === 'string' && a.visibility.length > 0) ? (a.visibility.charAt(0).toUpperCase() + a.visibility.slice(1)) : a.visibility;
+                    li.appendChild(vspan);
+                }
                 previewList.appendChild(li);
                 feedback.innerText = 'Attachment added.';
                 // clear file and link inputs
                 if (fileInput) fileInput.value = '';
                 if (linkInput) linkInput.value = '';
+                    if (contentTypeOther) contentTypeOther.value = '';
+                    if (scopeOther) scopeOther.value = '';
             }).catch(function(err){
                 feedback.innerText = 'Network or server error';
                 console.error(err);
