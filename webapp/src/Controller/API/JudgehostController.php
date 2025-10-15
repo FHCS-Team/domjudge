@@ -675,6 +675,226 @@ class JudgehostController extends AbstractFOSRestController
     }
 
     /**
+     * Add judging results from custom judgehost (for non-traditional problems).
+     * Accepts JSON with rubric scores and metadata.
+     *
+     * @throws ORMException
+     */
+    #[IsGranted('ROLE_JUDGEHOST')]
+    #[Rest\Post('/add-custom-judging-result')]
+    #[OA\Response(response: 200, description: 'When the judging result has been added successfully')]
+    #[OA\RequestBody(
+        required: true,
+        content: new OA\JsonContent(
+            required: ['submission_id', 'status', 'overall_score'],
+            properties: [
+                new OA\Property(
+                    property: 'submission_id',
+                    description: 'The custom judgehost submission ID',
+                    type: 'string'
+                ),
+                new OA\Property(
+                    property: 'status',
+                    description: 'The judging status (completed, error, timeout)',
+                    type: 'string'
+                ),
+                new OA\Property(
+                    property: 'overall_score',
+                    description: 'The overall score (0.0 to 1.0)',
+                    type: 'number',
+                    format: 'float'
+                ),
+                new OA\Property(
+                    property: 'rubrics',
+                    description: 'Array of rubric scores',
+                    type: 'array',
+                    items: new OA\Items(
+                        properties: [
+                            new OA\Property(property: 'name', type: 'string'),
+                            new OA\Property(property: 'score', type: 'number', format: 'float'),
+                            new OA\Property(property: 'weight', type: 'number', format: 'float'),
+                            new OA\Property(property: 'feedback', type: 'string'),
+                        ],
+                        type: 'object'
+                    )
+                ),
+                new OA\Property(
+                    property: 'logs_url',
+                    description: 'URL to fetch evaluation logs',
+                    type: 'string'
+                ),
+                new OA\Property(
+                    property: 'artifacts_urls',
+                    description: 'Array of URLs for generated artifacts',
+                    type: 'array',
+                    items: new OA\Items(type: 'string')
+                ),
+                new OA\Property(
+                    property: 'execution_time',
+                    description: 'Total execution time in seconds',
+                    type: 'number',
+                    format: 'float'
+                ),
+                new OA\Property(
+                    property: 'error_message',
+                    description: 'Error message if status is error',
+                    type: 'string'
+                ),
+            ]
+        )
+    )]
+    public function addCustomJudgingResultAction(Request $request): JsonResponse
+    {
+        $data = json_decode($request->getContent(), true);
+        
+        if (!$data) {
+            throw new BadRequestHttpException('Invalid JSON payload');
+        }
+
+        // Validate required fields
+        $required = ['submission_id', 'status', 'overall_score'];
+        foreach ($required as $field) {
+            if (!isset($data[$field])) {
+                throw new BadRequestHttpException("Field '$field' is mandatory");
+            }
+        }
+
+        $customSubmissionId = $data['submission_id'];
+        $status = $data['status'];
+        $overallScore = (float)$data['overall_score'];
+        $rubrics = $data['rubrics'] ?? [];
+        $logsUrl = $data['logs_url'] ?? null;
+        $artifactsUrls = $data['artifacts_urls'] ?? [];
+        $executionTime = $data['execution_time'] ?? null;
+        $errorMessage = $data['error_message'] ?? null;
+
+        $this->logger->info('Received custom judging result', [
+            'custom_submission_id' => $customSubmissionId,
+            'status' => $status,
+            'overall_score' => $overallScore,
+            'rubric_count' => count($rubrics),
+        ]);
+
+        // Find the submission by custom_judgehost_submission_id
+        $submission = $this->em->getRepository(Submission::class)->findOneBy([
+            'custom_judgehost_submission_id' => $customSubmissionId
+        ]);
+
+        if (!$submission) {
+            $this->logger->error('Submission not found for custom judgehost submission ID', [
+                'custom_submission_id' => $customSubmissionId,
+            ]);
+            throw new NotFoundHttpException("Submission with custom_judgehost_submission_id '$customSubmissionId' not found");
+        }
+
+        // Store execution metadata
+        $metadata = [
+            'status' => $status,
+            'overall_score' => $overallScore,
+            'execution_time' => $executionTime,
+            'logs_url' => $logsUrl,
+            'artifacts_urls' => $artifactsUrls,
+            'error_message' => $errorMessage,
+            'received_at' => (new \DateTime())->format('Y-m-d H:i:s'),
+        ];
+        $submission->setCustomExecutionMetadata($metadata);
+
+        $problem = $submission->getProblem();
+
+        // Process rubrics and create/update scores
+        foreach ($rubrics as $rubricData) {
+            $rubricName = $rubricData['name'] ?? 'Unknown';
+            $rubricScore = (float)($rubricData['score'] ?? 0.0);
+            $rubricWeight = (float)($rubricData['weight'] ?? 1.0);
+            $rubricFeedback = $rubricData['feedback'] ?? null;
+
+            // Find or create rubric for this problem
+            $rubric = $this->em->getRepository(Rubric::class)->findOneBy([
+                'problem' => $problem,
+                'name' => $rubricName,
+            ]);
+
+            if (!$rubric) {
+                // Create new rubric
+                $rubric = new Rubric();
+                $rubric->setName($rubricName);
+                $rubric->setType('automated');
+                $rubric->setWeight($rubricWeight);
+                $rubric->setProblem($problem);
+                $rubric->setDescription('Automated rubric from custom judgehost');
+                $this->em->persist($rubric);
+                $this->em->flush(); // Flush to get the rubric ID
+            }
+
+            // Find or create submission rubric score
+            $submissionRubricScore = $this->em->getRepository(SubmissionRubricScore::class)->findOneBy([
+                'submission' => $submission,
+                'rubric' => $rubric,
+            ]);
+
+            if (!$submissionRubricScore) {
+                $submissionRubricScore = new SubmissionRubricScore();
+                $submissionRubricScore->setSubmission($submission);
+                $submissionRubricScore->setRubric($rubric);
+            }
+
+            $submissionRubricScore->setScore($rubricScore);
+            $submissionRubricScore->setJudgeName('custom_judgehost');
+            $submissionRubricScore->setJudgedAt(new \DateTime());
+            $submissionRubricScore->setComments($rubricFeedback);
+
+            $this->em->persist($submissionRubricScore);
+        }
+
+        // Update submission judging status based on custom result
+        $judging = $submission->getJudgings()->first();
+        if ($judging) {
+            // Map custom judgehost status to DOMjudge verdict
+            $verdict = match($status) {
+                'completed' => $overallScore >= 0.5 ? 'correct' : 'wrong-answer',
+                'error' => 'run-error',
+                'timeout' => 'timelimit',
+                default => 'no-output',
+            };
+
+            $judging->setResult($verdict);
+            $judging->setEndtime(Utils::now());
+            
+            if ($errorMessage) {
+                $judging->setOutputCompile($errorMessage);
+            }
+
+            $this->em->persist($judging);
+        }
+
+        $this->em->flush();
+
+        $this->logger->info('Custom judging result processed successfully', [
+            'submission_id' => $submission->getSubmitid(),
+            'custom_submission_id' => $customSubmissionId,
+            'rubric_scores_saved' => count($rubrics),
+        ]);
+
+        // Trigger scoreboard update
+        $this->scoreboardService->refreshCache($submission->getContest());
+
+        // Fire balloon if applicable
+        $this->balloonService->updateBalloons($submission->getContest(), $submission, $judging);
+
+        // Fire event
+        if ($judging) {
+            $this->eventLogService->log('judging', $judging->getJudgingid(), 'update', $submission->getContest()->getCid());
+        }
+
+        return new JsonResponse([
+            'success' => true,
+            'message' => 'Judging result processed successfully',
+            'submission_id' => $submission->getSubmitid(),
+            'verdict' => $judging?->getResult(),
+        ], 200);
+    }
+
+    /**
      * Internal error reporting (back from judgehost).
      *
      * @throws NonUniqueResultException

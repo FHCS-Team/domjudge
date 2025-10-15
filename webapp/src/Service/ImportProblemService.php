@@ -43,7 +43,8 @@ class ImportProblemService
         protected readonly ConfigurationService $config,
         protected readonly EventLogService $eventLogService,
         protected readonly SubmissionService $submissionService,
-        protected readonly ValidatorInterface $validator
+        protected readonly ValidatorInterface $validator,
+        protected readonly CustomJudgehostService $customJudgehostService
     ) {}
 
     /**
@@ -297,6 +298,65 @@ class ImportProblemService
             $this->em->persist($contestProblem);
         }
         $this->em->flush();
+
+        // Check for custom judgehost problem (config.json in root)
+        $configJsonContent = $zip->getFromName('config.json');
+        if ($configJsonContent !== false) {
+            $customConfig = json_decode($configJsonContent, true);
+            if ($customConfig && isset($customConfig['project_type'])) {
+                $messages['info'][] = sprintf('Detected custom problem with project_type: %s', $customConfig['project_type']);
+                
+                // Mark as custom problem and store configuration
+                $problem->setIsCustomProblem(true);
+                $problem->setCustomConfig($customConfig);
+                $problem->setProjectType($customConfig['project_type']);
+                
+                // Register with custom judgehost if enabled
+                if ($this->customJudgehostService->isEnabled()) {
+                    try {
+                        // Extract the entire ZIP to a temporary file for upload
+                        $tempZipPath = tempnam(sys_get_temp_dir(), 'dj_problem_') . '.zip';
+                        copy($zip->filename, $tempZipPath);
+                        
+                        $uploadedFile = new UploadedFile(
+                            $tempZipPath,
+                            $clientName,
+                            'application/zip',
+                            null,
+                            true // test mode - don't check if file was uploaded via HTTP
+                        );
+                        
+                        $registrationResponse = $this->customJudgehostService->registerProblem(
+                            $problem,
+                            $uploadedFile,
+                            $customConfig
+                        );
+                        
+                        $problem->setCustomJudgehostData($registrationResponse);
+                        $messages['info'][] = 'Problem registered with custom judgehost successfully';
+                        
+                        // Clean up temporary file
+                        if (file_exists($tempZipPath)) {
+                            unlink($tempZipPath);
+                        }
+                    } catch (\Exception $e) {
+                        $messages['warning'][] = sprintf(
+                            'Failed to register problem with custom judgehost: %s',
+                            $e->getMessage()
+                        );
+                        $this->logger->error('Custom judgehost registration failed', [
+                            'problem_id' => $problem->getProbid(),
+                            'error' => $e->getMessage(),
+                        ]);
+                    }
+                } else {
+                    $messages['info'][] = 'Custom judgehost integration is disabled, problem marked but not registered';
+                }
+                
+                $this->em->persist($problem);
+                $this->em->flush();
+            }
+        }
 
         // Load the current testcases to see if we need to delete, update or insert testcases.
         $existingTestcases = [];

@@ -78,6 +78,73 @@
             {% endif %}
         {% endif %}
 
+                    </div>
+        {% endif %}
+
+        {# Display rubric scores for custom problems #}
+        {% if rubricScores is defined and rubricScores is not empty %}
+            <hr/>
+            <h4 class="text-center mt-4">
+                <i class="fas fa-list-check"></i> Evaluation Rubric Scores
+            </h4>
+            
+            {% if customExecutionMetadata is defined and customExecutionMetadata %}
+                <div class="text-center mb-3">
+                    <h5>
+                        Overall Score:
+                        <span class="badge {% if customExecutionMetadata.overall_score >= 0.7 %}text-bg-success{% elseif customExecutionMetadata.overall_score >= 0.5 %}text-bg-warning{% else %}text-bg-danger{% endif %} fs-4">
+                            {{ (customExecutionMetadata.overall_score * 100) | number_format(1) }}%
+                        </span>
+                    </h5>
+                </div>
+            {% endif %}
+
+            <div class="table-responsive">
+                <table class="table table-sm table-striped">
+                    <thead>
+                        <tr>
+                            <th>Criterion</th>
+                            <th>Score</th>
+                            <th>Feedback</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for rubricScore in rubricScores %}
+                            {% set rubric = rubricScore.rubric %}
+                            <tr>
+                                <td>
+                                    <strong>{{ rubric.name }}</strong>
+                                    {% if rubric.description %}
+                                        <br><small class="text-muted">{{ rubric.description }}</small>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <span class="badge {% if rubricScore.score >= 0.8 %}text-bg-success{% elseif rubricScore.score >= 0.6 %}text-bg-info{% elseif rubricScore.score >= 0.4 %}text-bg-warning{% else %}text-bg-danger{% endif %}">
+                                        {{ (rubricScore.score * 100) | number_format(1) }}%
+                                    </span>
+                                </td>
+                                <td>
+                                    {% if rubricScore.comments %}
+                                        {{ rubricScore.comments }}
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            {% if customExecutionMetadata is defined and customExecutionMetadata %}
+                {% if customExecutionMetadata.error_message %}
+                    <div class="alert alert-danger mt-3">
+                        <strong>Error:</strong> {{ customExecutionMetadata.error_message }}
+                    </div>
+                {% endif %}
+            {% endif %}
+        {% endif %}
+
         {% if showSampleOutput and judging.result != 'compiler-error' %}
             <hr/>
             <h4 class="text-center">Run(s) on the provided sample data</h4>

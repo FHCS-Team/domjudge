@@ -349,6 +349,16 @@ class SubmissionController extends BaseController
             $data['size'] = 'xl';
         }
 
+        // Add rubric scores for custom problems
+        if ($judging->getSubmission()->getProblem()->isCustomProblem()) {
+            $rubricScores = $this->em->getRepository(SubmissionRubricScore::class)->findBy(
+                ['submission' => $judging->getSubmission()],
+                ['rubric' => 'ASC']
+            );
+            $data['rubricScores'] = $rubricScores;
+            $data['customExecutionMetadata'] = $judging->getSubmission()->getCustomExecutionMetadata();
+        }
+
         if ($request->isXmlHttpRequest()) {
             return $this->render('team/submission_modal.html.twig', $data);
         } else {

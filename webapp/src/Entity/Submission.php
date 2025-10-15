@@ -108,6 +108,22 @@ class Submission extends BaseApiEntity implements
     #[Serializer\Exclude]
     private SubmissionSource $source = SubmissionSource::UNKNOWN;
 
+    // Custom judgehost fields
+    #[ORM\Column(
+        nullable: true,
+        options: ['comment' => 'Submission ID from custom judgehost']
+    )]
+    #[Serializer\Exclude]
+    private ?string $custom_judgehost_submission_id = null;
+
+    #[ORM\Column(
+        type: 'json',
+        nullable: true,
+        options: ['comment' => 'Metadata from custom judgehost execution']
+    )]
+    #[Serializer\Exclude]
+    private ?array $custom_execution_metadata = null;
+
     #[ORM\ManyToOne(inversedBy: 'submissions')]
     #[ORM\JoinColumn(name: 'cid', referencedColumnName: 'cid', onDelete: 'CASCADE')]
     #[Serializer\Exclude]
@@ -589,5 +605,29 @@ class Submission extends BaseApiEntity implements
     public function getSource(): SubmissionSource
     {
         return $this->source;
+    }
+
+    // Custom judgehost getters and setters
+
+    public function setCustomJudgehostSubmissionId(?string $customJudgehostSubmissionId): Submission
+    {
+        $this->custom_judgehost_submission_id = $customJudgehostSubmissionId;
+        return $this;
+    }
+
+    public function getCustomJudgehostSubmissionId(): ?string
+    {
+        return $this->custom_judgehost_submission_id;
+    }
+
+    public function setCustomExecutionMetadata(?array $customExecutionMetadata): Submission
+    {
+        $this->custom_execution_metadata = $customExecutionMetadata;
+        return $this;
+    }
+
+    public function getCustomExecutionMetadata(): ?array
+    {
+        return $this->custom_execution_metadata;
     }
 }

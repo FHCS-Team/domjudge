@@ -586,6 +586,16 @@ class SubmissionController extends BaseController
             'isAnalystMode' => $this->config->get('lazy_eval_results') === DOMJudgeService::EVAL_ANALYST,
         ];
 
+        // Fetch rubric scores for custom problems
+        if ($submission->getProblem()->isCustomProblem()) {
+            $rubricScores = $this->em->getRepository(SubmissionRubricScore::class)->findBy(
+                ['submission' => $submission],
+                ['rubric' => 'ASC']
+            );
+            $twigData['rubricScores'] = $rubricScores;
+            $twigData['customExecutionMetadata'] = $submission->getCustomExecutionMetadata();
+        }
+
         if ($selectedJudging === null) {
             // Automatically refresh page while we wait for judging data.
             $twigData['refresh'] = [
