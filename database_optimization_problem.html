@@ -6,37 +6,66 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Database Query Optimization Challenge</title>
     <style>
+        :root {
+            --accent: #2b8cff;
+            --muted: #6c757d;
+            --surface: #ffffff;
+            --bg: #f5f7fa;
+        }
+
+        body {
+            background: var(--bg);
+            margin: 0;
+        }
+
         .problem-container {
-            max-width: 1200px;
-            margin: 0 auto;
+            max-width: 1000px;
+            margin: 28px auto;
             padding: 20px;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
             line-height: 1.6;
+            color: #23303b;
+            background: var(--surface);
+            border-radius: 10px;
+            box-shadow: 0 6px 24px rgba(16, 24, 40, 0.06);
         }
 
         .header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, var(--accent) 0%, #6f42c1 100%);
             color: white;
-            padding: 30px;
-            border-radius: 10px;
-            margin-bottom: 30px;
+            padding: 18px 22px;
+            border-radius: 8px;
+            margin-bottom: 18px;
             text-align: center;
+            box-shadow: 0 6px 18px rgba(47, 79, 79, 0.08);
+        }
+
+        .header h1 {
+            margin: 0;
+            font-size: 1.6rem;
+            letter-spacing: -0.4px;
+        }
+
+        .header p {
+            margin: 6px 0 0;
+            opacity: 0.95
         }
 
         .section {
-            background: white;
-            border: 1px solid #e1e5e9;
+            background: #ffffff;
+            border: 1px solid #eef2f6;
             border-radius: 8px;
-            padding: 25px;
-            margin-bottom: 20px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            padding: 18px;
+            margin-bottom: 16px;
+            box-shadow: 0 1px 6px rgba(16, 24, 40, 0.03);
         }
 
         .section h2 {
-            color: #2c3e50;
-            border-bottom: 3px solid #3498db;
+            color: #16262e;
+            border-bottom: 2px solid rgba(43, 140, 255, 0.12);
             padding-bottom: 10px;
             margin-top: 0;
+            font-size: 1.15rem;
         }
 
         .section h3 {
@@ -96,6 +125,9 @@
             margin: 15px 0;
             font-family: 'Monaco', 'Courier New', monospace;
             overflow-x: auto;
+            white-space: pre-wrap;
+            /* preserve newlines and wrap long lines */
+            tab-size: 4;
         }
 
         .specs-grid {
@@ -112,37 +144,56 @@
             padding: 20px;
         }
 
-        .scoring-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin: 20px 0;
-            background: white;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        /* Scoring heading cards (compact for hackathon display) */
+        .scoring-headings {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 12px;
+            margin: 18px 0;
+        }
+
+        .scoring-card {
+            background: #ffffff;
+            border: 1px solid #e9ecef;
             border-radius: 8px;
-            overflow: hidden;
+            padding: 14px;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
         }
 
-        .scoring-table th,
-        .scoring-table td {
-            border: 1px solid #e1e5e9;
-            padding: 15px 12px;
-            text-align: left;
-            vertical-align: top;
+        .scoring-card h4 {
+            margin: 0;
+            font-size: 1rem;
+            color: #2c3e50;
+            font-weight: 700;
         }
 
-        .scoring-table th {
-            background: #f8f9fa;
-            font-weight: 600;
+        .scoring-card .weight {
+            font-weight: 700;
             color: #495057;
-            border-bottom: 2px solid #dee2e6;
         }
 
-        .scoring-table tbody tr:nth-child(even) {
+        .scoring-card .formula {
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 0.9rem;
+            color: #6c757d;
             background: #f8f9fa;
+            padding: 6px 8px;
+            border-radius: 6px;
         }
 
-        .scoring-table tbody tr:hover {
-            background: #e9ecef;
+        /* Simple list used for compact scoring */
+        .simple-list {
+            margin: 12px 0 0 1.1rem;
+            padding: 0;
+            font-size: 1rem;
+            color: #263238;
+        }
+
+        .simple-list li {
+            margin: 8px 0;
         }
 
         .badge {
@@ -269,31 +320,33 @@
 
         <div class="section">
             <h2>Database Schema</h2>
-            <div class="query-box">
-                -- events: main table 100 triệu+ bản ghi
-                CREATE TABLE events (
-                event_id BIGSERIAL PRIMARY KEY,
-                user_id BIGINT NOT NULL,
-                device_id BIGINT,
-                event_type VARCHAR(50),
-                event_ts TIMESTAMP WITHOUT TIME ZONE NOT NULL,
-                payload JSONB
-                );
+            <div class="section">
+                <h2>Database Schema</h2>
+                <pre class="query-box"><code>-- events: main table 100 triệu+ bản ghi
+CREATE TABLE events (
+    event_id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    device_id BIGINT,
+    event_type VARCHAR(50),
+    event_ts TIMESTAMP WITHOUT TIME ZONE NOT NULL,
+    payload JSONB
+);
 
-                -- users: 10 triệu bản ghi
-                CREATE TABLE users (
-                user_id BIGINT PRIMARY KEY,
-                signup_ts TIMESTAMP,
-                country CHAR(2),
-                plan VARCHAR(20)
-                );
+-- users: 10 triệu bản ghi
+CREATE TABLE users (
+    user_id BIGINT PRIMARY KEY,
+    signup_ts TIMESTAMP,
+    country CHAR(2),
+    plan VARCHAR(20)
+);
 
-                -- devices: 5 triệu bản ghi
-                CREATE TABLE devices (
-                device_id BIGINT PRIMARY KEY,
-                device_type VARCHAR(30),
-                os_version VARCHAR(20)
-                );
+-- devices: 5 triệu bản ghi
+CREATE TABLE devices (
+    device_id BIGINT PRIMARY KEY,
+    device_type VARCHAR(30),
+    os_version VARCHAR(20)
+);
+</code></pre>
             </div>
         </div>
 
@@ -301,78 +354,46 @@
             <h2>Benchmark Queries</h2>
 
             <h3>Q1: Count of events per event_type for active users in last 30 days</h3>
-            <div class="query-box">
-                SELECT e.event_type, count(*) as cnt
+            <pre class="query-box"><code>SELECT e.event_type, count(*) as cnt
                 FROM events e
                 JOIN users u ON u.user_id = e.user_id
                 WHERE e.event_ts >= now() - interval '30 days'
-                AND u.plan = 'pro'
+                    AND u.plan = 'pro'
                 GROUP BY e.event_type
-                ORDER BY cnt DESC;
-            </div>
+                ORDER BY cnt DESC;</code></pre>
 
             <h3>Q2: Recent distinct device types used by users from country 'VN'</h3>
-            <div class="query-box">
-                SELECT distinct d.device_type
+            <pre class="query-box"><code>SELECT DISTINCT d.device_type
                 FROM events e
                 JOIN devices d ON d.device_id = e.device_id
                 JOIN users u ON u.user_id = e.user_id
                 WHERE u.country = 'VN'
-                AND (e.payload->>'flag') = 'true'
-                AND e.event_ts BETWEEN now() - interval '7 days' AND now();
-            </div>
+                    AND (e.payload->>'flag') = 'true'
+                    AND e.event_ts BETWEEN now() - interval '7 days' AND now();</code></pre>
 
             <h3>Q3: Top 100 users by purchases in last 90 days</h3>
-            <div class="query-box">
-                SELECT e.user_id, u.signup_ts, count(*) AS purchases
+            <pre class="query-box"><code>SELECT e.user_id, u.signup_ts, count(*) AS purchases
                 FROM events e
                 JOIN users u ON u.user_id = e.user_id
                 WHERE e.event_type = 'purchase'
-                AND e.event_ts >= now() - interval '90 days'
+                    AND e.event_ts >= now() - interval '90 days'
                 GROUP BY e.user_id, u.signup_ts
                 ORDER BY purchases DESC
-                LIMIT 100;
-            </div>
+                LIMIT 100;</code></pre>
         </div>
 
         <div class="section">
             <h2>Scoring Criteria</h2>
-            <table class="scoring-table">
-                <thead>
-                    <tr>
-                        <th>Tiêu chí</th>
-                        <th>Trọng số</th>
-                        <th>Mô tả</th>
-                        <th>Công thức</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td><span class="badge badge-primary">Chính xác</span></td>
-                        <td><strong>50%</strong></td>
-                        <td>Kết quả đúng và đầy đủ</td>
-                        <td>100 điểm nếu hoàn toàn chính xác</td>
-                    </tr>
-                    <tr>
-                        <td><span class="badge badge-warning">Độ trễ</span></td>
-                        <td><strong>30%</strong></td>
-                        <td>Tốc độ thực thi query</td>
-                        <td>clamp(4000ms / median_time_ms, 0, 1)</td>
-                    </tr>
-                    <tr>
-                        <td><span class="badge badge-success">Chịu tải</span></td>
-                        <td><strong>10%</strong></td>
-                        <td>Throughput 10 client đồng thời</td>
-                        <td>clamp(measured/10 qps, 0, 1)</td>
-                    </tr>
-                    <tr>
-                        <td><span class="badge badge-danger">Tài nguyên</span></td>
-                        <td><strong>10%</strong></td>
-                        <td>Storage sử dụng thêm</td>
-                        <td>clamp(1 - extra/0.3*base, 0, 1)</td>
-                    </tr>
-                </tbody>
-            </table>
+            <ul class="simple-list">
+                <li><strong>Chính xác — 50%:</strong> Kết quả đúng và đầy đủ — <span class="formula">100 điểm nếu hoàn
+                        toàn chính xác</span></li>
+                <li><strong>Độ trễ — 30%:</strong> Tốc độ thực thi query — <span class="formula">clamp(4000ms /
+                        median_time_ms, 0, 1)</span></li>
+                <li><strong>Chịu tải — 10%:</strong> Throughput 10 client đồng thời — <span
+                        class="formula">clamp(measured/10 qps, 0, 1)</span></li>
+                <li><strong>Tài nguyên — 10%:</strong> Storage sử dụng thêm — <span class="formula">clamp(1 -
+                        extra/0.3*base, 0, 1)</span></li>
+            </ul>
         </div>
 
         <div class="section">
