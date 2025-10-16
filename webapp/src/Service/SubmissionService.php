@@ -54,6 +54,7 @@ class SubmissionService
         protected readonly EventLogService $eventLogService,
         protected readonly ScoreboardService $scoreboardService,
         protected readonly PaginatorInterface $paginator,
+        protected readonly CustomJudgehostService $customJudgehostService,
     ) {}
 
     /**
@@ -733,15 +734,66 @@ class SubmissionService
             // This is so that we can use the submitid/judgingid below.
             $this->em->flush();
 
-            $priority = match ($source) {
-                SubmissionSource::PROBLEM_IMPORT => JudgeTask::PRIORITY_LOW,
-                default => JudgeTask::PRIORITY_DEFAULT,
-            };
-            // Create judgetask as invalid when evaluating as analyst.
-            $lazyEval = $this->config->get('lazy_eval_results');
-            // We create invalid judgetasks, and only mark them valid when they are interesting for the analysts.
-            $start_invalid = $lazyEval === DOMJudgeService::EVAL_ANALYST && $source == SubmissionSource::SHADOWING;
-            $this->dj->maybeCreateJudgeTasks($judging, $priority, valid: !$start_invalid);
+            // Check if this is a custom problem and route to custom judgehost
+            if ($problem->getProblem()->isCustomProblem() && $this->customJudgehostService->isEnabled()) {
+                $this->logger->info('Routing submission to custom judgehost', [
+                    'submission_id' => $submission->getSubmitid(),
+                    'problem_id' => $problem->getProblem()->getProbid(),
+                    'project_type' => $problem->getProblem()->getProjectType(),
+                ]);
+
+                try {
+                    // Gather submission file contents
+                    $fileContents = [];
+                    foreach ($submission->getFiles() as $submissionFile) {
+                        $fileContents[$submissionFile->getFilename()] = $submissionFile->getSourcecode();
+                    }
+
+                    // Submit to custom judgehost
+                    $response = $this->customJudgehostService->submitForEvaluation(
+                        $submission,
+                        $problem->getProblem(),
+                        $fileContents
+                    );
+
+                    // Store the custom judgehost submission ID
+                    if (isset($response['data']['submission_id'])) {
+                        $submission->setCustomJudgehostSubmissionId($response['data']['submission_id']);
+                        $this->em->persist($submission);
+                        $this->em->flush();
+
+                        $this->logger->info('Submission forwarded to custom judgehost', [
+                            'submission_id' => $submission->getSubmitid(),
+                            'custom_submission_id' => $response['data']['submission_id'],
+                        ]);
+                    }
+
+                    // Mark judging as pending (waiting for custom judgehost)
+                    $judging->setStarttime(Utils::now());
+                    // Don't create regular judge tasks for custom problems
+                    $this->em->persist($judging);
+                } catch (\Exception $e) {
+                    $this->logger->error('Failed to submit to custom judgehost', [
+                        'submission_id' => $submission->getSubmitid(),
+                        'error' => $e->getMessage(),
+                    ]);
+                    // Mark judging as system error
+                    $judging->setResult('judging-error');
+                    $judging->setEndtime(Utils::now());
+                    $this->em->persist($judging);
+                }
+            } else {
+                // Regular judging for non-custom problems
+                $priority = match ($source) {
+                    SubmissionSource::PROBLEM_IMPORT => JudgeTask::PRIORITY_LOW,
+                    default => JudgeTask::PRIORITY_DEFAULT,
+                };
+                // Create judgetask as invalid when evaluating as analyst.
+                $lazyEval = $this->config->get('lazy_eval_results');
+                // We create invalid judgetasks, and only mark them valid when they are interesting for the analysts.
+                $start_invalid = $lazyEval === DOMJudgeService::EVAL_ANALYST && $source == SubmissionSource::SHADOWING;
+                $this->dj->maybeCreateJudgeTasks($judging, $priority, valid: !$start_invalid);
+            }
         }
 
         $this->em->wrapInTransaction(function () use ($contest, $submission) {

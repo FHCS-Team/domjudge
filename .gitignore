@@ -16,3 +16,6 @@ __pycache__
 .idea
 /chroot
 webapp/public/uploads/
+
+# Ignore task/docs directory (often contains generated/AI artifacts)
+/_tasks/

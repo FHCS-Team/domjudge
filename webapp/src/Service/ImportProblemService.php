@@ -43,7 +43,8 @@ class ImportProblemService
         protected readonly ConfigurationService $config,
         protected readonly EventLogService $eventLogService,
         protected readonly SubmissionService $submissionService,
-        protected readonly ValidatorInterface $validator
+        protected readonly ValidatorInterface $validator,
+        protected readonly CustomJudgehostService $customJudgehostService
     ) {}
 
     /**
@@ -81,70 +82,103 @@ class ImportProblemService
 
         $propertiesString = $zip->getFromName($propertiesFile);
         $problemYaml = $zip->getFromName($yamlFile);
+        $configJson = $zip->getFromName('config.json');
 
-        if ($propertiesString === false && $problemYaml === false) {
-            $messages['danger'][] = sprintf('ZIP file contains neither %s nor %s, not a valid problem archive?',
+        // Check if this is a custom problem (has config.json) or standard problem (has .ini or .yaml)
+        if ($propertiesString === false && $problemYaml === false && $configJson === false) {
+            $messages['danger'][] = sprintf('ZIP file contains neither %s, %s, nor config.json - not a valid problem archive',
                 $propertiesFile, $yamlFile);
             return null;
         }
 
-        $properties = [];
-
-        if ($propertiesString !== false) {
-            $tryParseProperties = parse_ini_string($propertiesString);
-            if (is_array($tryParseProperties)) {
-                $properties = $tryParseProperties;
-            } else {
-                $messages['warning'][] = "The given domjudge-problem.ini is invalid, ignoring.";
-            }
-        }
-
-        // Only preserve valid keys:
-        $problemProperties        = array_intersect_key($properties, array_flip($iniKeysProblem));
-        $contestProblemProperties = array_intersect_key($properties, array_flip($iniKeysContestProblem));
-
-        // The property in the INI is called short-name (because that is what we have called it in exports),
-        // but the property on the contest problem is shortname, so remap it.
-        if (isset($contestProblemProperties['short-name'])) {
-            $contestProblemProperties['shortname'] = $contestProblemProperties['short-name'];
-            unset($contestProblemProperties['short-name']);
-        }
-
-        // Set timelimit from alternative source:
-        if (!isset($problemProperties['timelimit']) &&
-            ($str = $zip->getFromName($tleFile)) !== false) {
-            $problemProperties['timelimit'] = trim($str);
-        }
-
-        // Take problem:externalid from zip filename, and use as backup for
-        // problem:name and contestproblem:shortname if these are not specified.
+        // Handle custom problems with config.json differently
+        $isCustomProblem = ($configJson !== false);
+        
+        // Extract external ID from filename as a fallback
         $externalId = preg_replace('/[^a-zA-Z0-9-_]/', '', basename($clientName, '.zip'));
         if ((string)$externalId === '') {
             throw new InvalidArgumentException("Could not extract an identifier from '$clientName'.");
         }
-
-        if (!array_key_exists('externalid', $problemProperties)) {
-            $problemProperties['externalid'] = $externalId;
+        
+        if ($isCustomProblem) {
+            $customConfig = json_decode($configJson, true);
+            if (!$customConfig || !isset($customConfig['problem_id'])) {
+                $messages['danger'][] = 'Invalid config.json: missing required field "problem_id"';
+                return null;
+            }
+            
+            // For custom problems, use problem_id from config.json as externalid
+            $externalId = $customConfig['problem_id'];
+            
+            // For custom problems, create minimal properties from config.json
+            $problemProperties = [
+                'name' => $customConfig['problem_name'] ?? $customConfig['problem_id'],
+                'externalid' => $externalId,
+                'timelimit' => $customConfig['time_limit'] ?? $defaultTimelimit,
+            ];
+            
+            $contestProblemProperties = [
+                'shortname' => $externalId,
+                'points' => 1,
+            ];
+            
+            $messages['info'][] = sprintf('Detected custom problem: %s', $customConfig['problem_id']);
         }
 
-        if (!isset($contestProblemProperties['shortname'])) {
-            $contestProblemProperties['shortname'] = $externalId;
-        }
+        // For standard problems, parse traditional properties
+        if (!$isCustomProblem) {
+            $properties = [];
 
-        // Set default of 1 point for a problem if not specified
-        if (!isset($contestProblemProperties['points'])) {
-            $contestProblemProperties['points'] = 1;
-        }
+            if ($propertiesString !== false) {
+                $tryParseProperties = parse_ini_string($propertiesString);
+                if (is_array($tryParseProperties)) {
+                    $properties = $tryParseProperties;
+                } else {
+                    $messages['warning'][] = "The given domjudge-problem.ini is invalid, ignoring.";
+                }
+            }
 
-        if (isset($problemProperties['special_compare'])) {
-            $problemProperties['compare_executable'] =
-                $this->em->getRepository(Executable::class)->find($problemProperties['special_compare']);
-            unset($problemProperties['special_compare']);
-        }
-        if (isset($problemProperties['special_run'])) {
-            $problemProperties['run_executable'] =
-                $this->em->getRepository(Executable::class)->find($problemProperties['special_run']);
-            unset($problemProperties['special_run']);
+            // Only preserve valid keys:
+            $problemProperties        = array_intersect_key($properties, array_flip($iniKeysProblem));
+            $contestProblemProperties = array_intersect_key($properties, array_flip($iniKeysContestProblem));
+
+            // The property in the INI is called short-name (because that is what we have called it in exports),
+            // but the property on the contest problem is shortname, so remap it.
+            if (isset($contestProblemProperties['short-name'])) {
+                $contestProblemProperties['shortname'] = $contestProblemProperties['short-name'];
+                unset($contestProblemProperties['short-name']);
+            }
+
+            // Set timelimit from alternative source:
+            if (!isset($problemProperties['timelimit']) &&
+                ($str = $zip->getFromName($tleFile)) !== false) {
+                $problemProperties['timelimit'] = trim($str);
+            }
+
+            // Use externalId as fallback for problem:name and contestproblem:shortname if not specified
+            if (!array_key_exists('externalid', $problemProperties)) {
+                $problemProperties['externalid'] = $externalId;
+            }
+
+            if (!isset($contestProblemProperties['shortname'])) {
+                $contestProblemProperties['shortname'] = $externalId;
+            }
+
+            // Set default of 1 point for a problem if not specified
+            if (!isset($contestProblemProperties['points'])) {
+                $contestProblemProperties['points'] = 1;
+            }
+
+            if (isset($problemProperties['special_compare'])) {
+                $problemProperties['compare_executable'] =
+                    $this->em->getRepository(Executable::class)->find($problemProperties['special_compare']);
+                unset($problemProperties['special_compare']);
+            }
+            if (isset($problemProperties['special_run'])) {
+                $problemProperties['run_executable'] =
+                    $this->em->getRepository(Executable::class)->find($problemProperties['special_run']);
+                unset($problemProperties['special_run']);
+            }
         }
 
         /** @var ContestProblem|null $contestProblem */
@@ -297,6 +331,65 @@ class ImportProblemService
             $this->em->persist($contestProblem);
         }
         $this->em->flush();
+
+        // Check for custom judgehost problem (config.json in root)
+        $configJsonContent = $zip->getFromName('config.json');
+        if ($configJsonContent !== false) {
+            $customConfig = json_decode($configJsonContent, true);
+            if ($customConfig && isset($customConfig['project_type'])) {
+                $messages['info'][] = sprintf('Detected custom problem with project_type: %s', $customConfig['project_type']);
+                
+                // Mark as custom problem and store configuration
+                $problem->setIsCustomProblem(true);
+                $problem->setCustomConfig($customConfig);
+                $problem->setProjectType($customConfig['project_type']);
+                
+                // Register with custom judgehost if enabled
+                if ($this->customJudgehostService->isEnabled()) {
+                    try {
+                        // Extract the entire ZIP to a temporary file for upload
+                        $tempZipPath = tempnam(sys_get_temp_dir(), 'dj_problem_') . '.zip';
+                        copy($zip->filename, $tempZipPath);
+                        
+                        $uploadedFile = new UploadedFile(
+                            $tempZipPath,
+                            $clientName,
+                            'application/zip',
+                            null,
+                            true // test mode - don't check if file was uploaded via HTTP
+                        );
+                        
+                        $registrationResponse = $this->customJudgehostService->registerProblem(
+                            $problem,
+                            $uploadedFile,
+                            $customConfig
+                        );
+                        
+                        $problem->setCustomJudgehostData($registrationResponse);
+                        $messages['info'][] = 'Problem registered with custom judgehost successfully';
+                        
+                        // Clean up temporary file
+                        if (file_exists($tempZipPath)) {
+                            unlink($tempZipPath);
+                        }
+                    } catch (\Exception $e) {
+                        $messages['warning'][] = sprintf(
+                            'Failed to register problem with custom judgehost: %s',
+                            $e->getMessage()
+                        );
+                        $this->logger->error('Custom judgehost registration failed', [
+                            'problem_id' => $problem->getProbid(),
+                            'error' => $e->getMessage(),
+                        ]);
+                    }
+                } else {
+                    $messages['info'][] = 'Custom judgehost integration is disabled, problem marked but not registered';
+                }
+                
+                $this->em->persist($problem);
+                $this->em->flush();
+            }
+        }
 
         // Load the current testcases to see if we need to delete, update or insert testcases.
         $existingTestcases = [];

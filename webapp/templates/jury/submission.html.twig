@@ -168,6 +168,14 @@
                         {% endif %}
                         {{ submission.problem | entityIdBadge('p') }}
                     </a>
+                    {% if submission.problem.isCustomProblem %}
+                        <span class="badge badge-primary" title="Custom Problem - Evaluated by external judgehost">
+                            <i class="fas fa-rocket"></i> CUSTOM
+                        </span>
+                        {% if submission.problem.projectType %}
+                            <span class="badge badge-info">{{ submission.problem.projectType }}</span>
+                        {% endif %}
+                    {% endif %}
                 </span>
 
                 <span>
@@ -606,6 +614,126 @@
         {% if (selectedJudging is not null and selectedJudging.result != 'compiler-error')
             or (externalJudgement is not null and externalJudgement.result != 'compiler-error') %}
             {% include 'jury/partials/submission_graph.html.twig' %}
+        {% endif %}
+
+        {# Display rubric scores for custom problems #}
+        {% if rubricScores is defined and rubricScores is not empty %}
+            <div class="card mb-3 mt-3">
+                <div class="card-header">
+                    <h4 class="mb-0">
+                        <i class="fas fa-list-check"></i> Rubric Evaluation Scores
+                        {% if submission.problem.projectType %}
+                            <span class="badge badge-info">{{ submission.problem.projectType }}</span>
+                        {% endif %}
+                    </h4>
+                </div>
+                <div class="card-body">
+                    {% if customExecutionMetadata is defined and customExecutionMetadata %}
+                        <div class="mb-3">
+                            <strong>Overall Score:</strong>
+                            <span class="badge {% if customExecutionMetadata.overall_score >= 0.7 %}badge-success{% elseif customExecutionMetadata.overall_score >= 0.5 %}badge-warning{% else %}badge-danger{% endif %} fs-5">
+                                {{ (customExecutionMetadata.overall_score * 100) | number_format(1) }}%
+                            </span>
+                            {% if customExecutionMetadata.execution_time %}
+                                | <strong>Execution Time:</strong> {{ customExecutionMetadata.execution_time | number_format(2) }}s
+                            {% endif %}
+                            {% if customExecutionMetadata.status %}
+                                | <strong>Status:</strong> <span class="badge badge-secondary">{{ customExecutionMetadata.status }}</span>
+                            {% endif %}
+                        </div>
+                    {% endif %}
+
+                    <table class="table table-sm table-striped">
+                        <thead>
+                            <tr>
+                                <th>Criterion</th>
+                                <th>Score</th>
+                                <th>Weight</th>
+                                <th>Weighted Score</th>
+                                <th>Feedback</th>
+                                <th>Judged</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% set totalWeight = 0 %}
+                            {% set totalWeightedScore = 0 %}
+                            {% for rubricScore in rubricScores %}
+                                {% set rubric = rubricScore.rubric %}
+                                {% set weightedScore = rubricScore.score * rubric.weight %}
+                                {% set totalWeight = totalWeight + rubric.weight %}
+                                {% set totalWeightedScore = totalWeightedScore + weightedScore %}
+                                <tr>
+                                    <td>
+                                        <strong>{{ rubric.name }}</strong>
+                                        {% if rubric.description %}
+                                            <br><small class="text-muted">{{ rubric.description }}</small>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <span class="badge {% if rubricScore.score >= 0.8 %}badge-success{% elseif rubricScore.score >= 0.6 %}badge-info{% elseif rubricScore.score >= 0.4 %}badge-warning{% else %}badge-danger{% endif %}">
+                                            {{ (rubricScore.score * 100) | number_format(1) }}%
+                                        </span>
+                                    </td>
+                                    <td>{{ rubric.weight | number_format(2) }}</td>
+                                    <td>{{ weightedScore | number_format(2) }}</td>
+                                    <td>
+                                        {% if rubricScore.comments %}
+                                            <small>{{ rubricScore.comments }}</small>
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <small class="text-muted">
+                                            {{ rubricScore.judgedAt | printtime('Y-m-d H:i') }}<br>
+                                            by {{ rubricScore.judgeName }}
+                                        </small>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                        <tfoot>
+                            <tr class="font-weight-bold">
+                                <td><strong>Total</strong></td>
+                                <td colspan="2"><strong>Total Weight: {{ totalWeight | number_format(2) }}</strong></td>
+                                <td><strong>{{ totalWeightedScore | number_format(2) }}</strong></td>
+                                <td colspan="2">
+                                    {% if totalWeight > 0 %}
+                                        <strong>Normalized: {{ ((totalWeightedScore / totalWeight) * 100) | number_format(1) }}%</strong>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        </tfoot>
+                    </table>
+
+                    {% if customExecutionMetadata is defined and customExecutionMetadata %}
+                        {% if customExecutionMetadata.logs_url %}
+                            <div class="mt-2">
+                                <a href="{{ customExecutionMetadata.logs_url }}" target="_blank" class="btn btn-sm btn-outline-secondary">
+                                    <i class="fas fa-file-alt"></i> View Execution Logs
+                                </a>
+                            </div>
+                        {% endif %}
+
+                        {% if customExecutionMetadata.artifacts_urls and customExecutionMetadata.artifacts_urls is not empty %}
+                            <div class="mt-2">
+                                <strong>Artifacts:</strong>
+                                {% for artifactUrl in customExecutionMetadata.artifacts_urls %}
+                                    <a href="{{ artifactUrl }}" target="_blank" class="btn btn-sm btn-outline-info">
+                                        <i class="fas fa-download"></i> Artifact {{ loop.index }}
+                                    </a>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+
+                        {% if customExecutionMetadata.error_message %}
+                            <div class="alert alert-danger mt-3">
+                                <strong>Error:</strong> {{ customExecutionMetadata.error_message }}
+                            </div>
+                        {% endif %}
+                    {% endif %}
+                </div>
+            </div>
         {% endif %}
 
         <hr>

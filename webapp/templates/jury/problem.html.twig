@@ -1,6 +1,51 @@
 {% extends "jury/base.html.twig" %}
 {% import "jury/jury_macros.twig" as macros %}
 
+{# Macro for rendering package tree #}
+{% macro render_tree(nodes, depth) %}
+    {% set indent = depth * 20 %}
+    <ul class="list-unstyled mb-0" style="margin-left: {{ indent }}px;">
+    {% for node in nodes %}
+        <li class="tree-item">
+            {% if node.type == 'directory' %}
+                <i class="fas fa-folder text-warning"></i>
+                <strong>{{ node.name }}/</strong>
+                {% if node.child_count > 0 %}
+                    <span class="text-muted">({{ node.child_count }} items)</span>
+                {% endif %}
+                {% if node.children|length > 0 %}
+                    {{ _self.render_tree(node.children, depth + 1) }}
+                {% endif %}
+            {% else %}
+                {% set icon = 'file' %}
+                {% set color = 'secondary' %}
+                {% if node.extension in ['json', 'yaml', 'yml'] %}
+                    {% set icon = 'file-code' %}
+                    {% set color = 'info' %}
+                {% elseif node.extension in ['sh', 'bash'] %}
+                    {% set icon = 'file-code' %}
+                    {% set color = 'success' %}
+                {% elseif node.extension == 'sql' %}
+                    {% set icon = 'database' %}
+                    {% set color = 'primary' %}
+                {% elseif node.extension in ['md', 'txt'] %}
+                    {% set icon = 'file-alt' %}
+                    {% set color = 'secondary' %}
+                {% elseif node.name == 'Dockerfile' %}
+                    {% set icon = 'docker' %}
+                    {% set color = 'primary' %}
+                {% endif %}
+                <i class="fas fa-{{ icon }} text-{{ color }}"></i>
+                {{ node.name }}
+                {% if node.size_human %}
+                    <small class="text-muted">({{ node.size_human }})</small>
+                {% endif %}
+            {% endif %}
+        </li>
+    {% endfor %}
+    </ul>
+{% endmacro %}
+
 {% block title %}Problem {{ problem.probid }} - {{ parent() }}{% endblock %}
 
 {% block extrahead %}
@@ -8,264 +53,666 @@
     {{ macros.table_extrahead() }}
     {{ macros.toggle_extrahead() }}
     {{ knp_pagination_rel_links(submissions) }}
+    <style>
+        .package-tree {
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+        .package-tree .tree-item {
+            padding: 2px 0;
+            line-height: 1.8;
+        }
+        .package-tree .fas {
+            margin-right: 5px;
+        }
+        .container-section {
+            border-left: 3px solid #007bff;
+            padding-left: 15px;
+            margin-bottom: 15px;
+        }
+    </style>
 {% endblock %}
 
 {% block content %}
 
+    {# Set default values for variables that might not be set #}
+    {% set isCustomProblem = isCustomProblem|default(false) %}
+    {% set projectType = projectType|default(null) %}
+    {% set packageType = packageType|default(null) %}
+    {% set packageSource = packageSource|default(null) %}
+    {% set packagePath = packagePath|default(null) %}
+    {% set containers = containers|default([]) %}
+    {% set containerStageConfigs = containerStageConfigs|default({}) %}
+    {% set hooksInfo = hooksInfo|default({}) %}
+    {% set rubrics = rubrics|default([]) %}
+    {% set customConfig = customConfig|default(null) %}
+    {% set packageTree = packageTree|default(null) %}
+    {% set extractedPath = extractedPath|default(null) %}
+
     <h1>Problem {{ problem.name }}</h1>
 
-    <div class="row">
-        <div class="col-lg-4">
-            <table class="table table-sm table-striped">
-                <tr>
-                    <th>ID</th>
-                    <td>p{{ problem.probid }}</td>
-                </tr>
-                <tr>
-                    <th>External ID</th>
-                    <td>{{ problem.externalid }}</td>
-                </tr>
-                <tr>
-                    <th>Testcases</th>
-                    <td>
-                        {% if problem.testcases is empty %}
-                            <em>no testcases</em>
-                        {% else %}
-                            {{ problem.testcases.count }}
-                        {% endif %}
-                        <a href="{{ path('jury_problem_testcases', {'probId': problem.probid}) }}">details
-                            {%- if is_granted('ROLE_ADMIN') and not lockedProblem -%}
-                                / edit
-                            {% endif %}
-                        </a>
-                    </td>
-                </tr>
-                <tr>
-                    <th>Timelimit</th>
-                    <td>{{ problem.timelimit }} sec</td>
-                </tr>
-                <tr>
-                    <th>Memory limit</th>
-                    <td>
-                        {% if problem.memlimit == null %}
-                            {{ defaultMemoryLimit }} kB (default)
-                        {% else %}
-                            {{ problem.memlimit }} kB
-                        {% endif %}
-                    </td>
-                </tr>
-                <tr>
-                    <th>Output limit</th>
-                    <td>
-                        {% if problem.outputlimit == null %}
-                            {{ defaultOutputLimit }} kB (default)
-                        {% else %}
-                            {{ problem.outputlimit }} kB
-                        {% endif %}
-                    </td>
-                </tr>
-                {% if problem.problemstatementType is not empty %}
+    {# Debug Section - Remove after testing #}
+    <div class="alert alert-info">
+        <strong>Debug Info:</strong><br>
+        isCustomProblem: {{ isCustomProblem ? 'true' : 'false' }}<br>
+        customConfig: {{ customConfig ? 'exists' : 'null' }}<br>
+        {% if customConfig %}
+            - problem_name: {{ customConfig.problem_name|default('null') }}<br>
+            - containers in config: {{ customConfig.containers is defined and customConfig.containers ? customConfig.containers|length : 0 }}<br>
+        {% endif %}
+        containers passed: {{ containers|length }}<br>
+        packagePath: {{ packagePath|default('null') }}<br>
+        packageTree: {{ packageTree ? 'exists' : 'null' }}<br>
+        extractedPath: {{ extractedPath|default('null') }}<br>
+    </div>
+
+    {# Overview Section #}
+    <div class="card mb-4">
+        <div class="card-header">
+            <h4 class="mb-0">Overview</h4>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-lg-6">
+                    <table class="table table-sm table-borderless">
                     <tr>
-                        <th>Problem statement</th>
-                        <td>
-                            <a href="{{ path('jury_problem_statement', {'probId': problem.probid}) }}">
-                                <i title="view problem statement"
-                                   class="fas fa-file-{{ problem.problemstatementType }}"></i>
-                            </a>
-                        </td>
+                        <th>Title:</th>
+                        <td><strong>{{ customConfig.problem_name|default(problem.name)|default('No info') }}</strong></td>
                     </tr>
-                {% endif %}
-                <tr>
-                    <th>Run script</th>
-                    <td class="filename">
-                        {% if problem.runExecutable is not empty %}
-                            <a href="{{ path('jury_executable', {'execId': problem.runExecutable.execid}) }}">{{ problem.runExecutable.execid }}</a>
-                        {% else %}
-                            <a href="{{ path('jury_executable', {'execId': defaultRunExecutable}) }}">{{ defaultRunExecutable }}</a>
-                            (default)
+                    <tr>
+
+                    
+                            <th>Contest:</th>
+                            <td>
+                                {% if problem.contestProblems is not empty %}
+                                    {% for contestProblem in problem.contestProblems %}
+                                        <div class="mb-1">
+                                            <span class="font-weight-bold">Allow Submit:</span> {% include 'jury/partials/problem_toggle.html.twig' with {type: 'submit', enabled: contestProblem.allowSubmit} %}
+                                            <br><span class="font-weight-bold">Allow Judge:</span> {% include 'jury/partials/problem_toggle.html.twig' with {type: 'judge', enabled: contestProblem.allowJudge} %}
+                                        </div>
+                                    {% endfor %}
+                                {% else %}
+                                    <span class="text-muted">No contest assigned</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th style="width: 150px;">ID:</th>
+                            <td>p{{ problem.probid }}</td>
+                        </tr>
+                        <tr>
+                            <th>External ID:</th>
+                            <td>{{ problem.externalid|default('No info') }}</td>
+                        </tr>
+                        
+                        <tr>
+                            <th>Project Type:</th>
+                            <td>
+                                {% if projectType %}
+                                    <span class="badge badge-primary">{{ projectType }}</span>
+                                {% else %}
+                                    <span class="text-muted">No info</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Time Limit:</th>
+                            <td>{{ problem.timelimit }} sec</td>
+                        </tr>
+                        <tr>
+                            <th>Version:</th>
+                            <td>{{ customConfig.version|default('No info') }}</td>
+                        </tr>
+                        <tr>
+                            <th>Total Containers:</th>
+                            <td>{{ containers|length }}</td>
+                        </tr>
+                    </table>
+                </div>
+                <div class="col-lg-6">
+                    <table class="table table-sm table-borderless">
+                        <tr>
+                            <th style="width: 150px;">Description:</th>
+                            <td>{{ customConfig.description|default('No info') }}</td>
+                        </tr>
+                        {% if problem.problemstatementType is not empty %}
+                        <tr>
+                            <th>Statement:</th>
+                            <td>
+                                <a href="{{ path('jury_problem_statement', {'probId': problem.probid}) }}" class="btn btn-sm btn-outline-primary">
+                                    <i class="fas fa-file-{{ problem.problemstatementType }}"></i> View Statement
+                                </a>
+                            </td>
+                        </tr>
                         {% endif %}
-                    </td>
-                </tr>
-                {% if problem.isInteractiveProblem %}
-                    <tr>
-                        <th>Compare script</th>
-                        <td>Run script combines run and compare script.</td>
-                    </tr>
-                {% else %}
-                    <tr>
-                        <th>Compare script</th>
-                        <td class="filename">
-                            {% if problem.compareExecutable is not empty %}
-                                <a href="{{ path('jury_executable', {'execId': problem.compareExecutable.execid}) }}">{{ problem.compareExecutable.execid }}</a>
-                            {% else %}
-                                <a href="{{ path('jury_executable', {'execId': defaultCompareExecutable}) }}">{{ defaultCompareExecutable }}</a>
-                                (default)
-                            {% endif %}
-                        </td>
-                    </tr>
-                {% endif %}
-                {% if problem.specialCompareArgs is not empty %}
-                    <tr>
-                        <th>Compare script arguments</th>
-                        <td class="filename">{{ problem.specialCompareArgs }}</td>
-                    </tr>
-                {% endif %}
-                {% if type is not empty %}
-                    <tr>
-                        <th>Type</th>
-                        <td>{{ type }}</td>
-                    </tr>
-                {% endif %}
-                <tr>
-                    <th>Languages</th>
-                    <td>
-                        {% if problem.languages is empty %}
-                            <em>all languages enabled for the corresponding contest</em>
-                        {% else %}
-                            <ul>
-                                {% for language in problem.languages %}
-                                    <li><a href="{{ path('jury_language', {'langId': language.langid}) }}">{{ language.name }}</a></li>
-                                {% endfor %}
-                            </ul>
+                        <tr>
+                            <th>Contest:</th>
+                            <td>
+                                {% if problem.contestProblems is not empty %}
+                                    {% for contestProblem in problem.contestProblems %}
+                                        <a href="{{ path('jury_contest', {'contestId': contestProblem.cid}) }}">
+                                            {{ contestProblem.contest.name }}
+                                        </a>
+                                        {% if not loop.last %}, {% endif %}
+                                    {% endfor %}
+                                {% else %}
+                                    <span class="text-muted">No info</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Package Path:</th>
+                            <td>
+                                {% if packagePath %}
+                                    <small><code>{{ packagePath }}</code></small>
+                                {% else %}
+                                    <span class="text-muted">No info</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Package Source:</th>
+                            <td>
+                                {% if packageSource %}
+                                    <small class="text-break" style="word-break: break-all;">{{ packageSource }}</small>
+                                {% else %}
+                                    <span class="text-muted">No info</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        
+                    </table>
+                </div>
+            </div>
+            
+            {# Additional Configuration Fields #}
+            {% if customConfig %}
+            <hr>
+            <h6 class="mb-3">Additional Configuration</h6>
+            <div class="row">
+                <div class="col-lg-6">
+                    <table class="table table-sm table-borderless">
+                        {% if customConfig.hooks_config is defined %}
+                        <tr>
+                            <th style="width: 200px;">Periodic Interval:</th>
+                            <td>{{ customConfig.hooks_config.periodic_interval_seconds|default('No info') }} seconds</td>
+                        </tr>
+                        <tr>
+                            <th>Hook Timeout:</th>
+                            <td>{{ customConfig.hooks_config.hook_timeout_seconds|default('No info') }} seconds</td>
+                        </tr>
                         {% endif %}
-                    </td>
-                </tr>
-            </table>
+                        <tr>
+                            <th>Evaluation Model:</th>
+                            <td><span class="text-muted">Multi-container Docker evaluation</span></td>
+                        </tr>
+                    </table>
+                </div>
+                <div class="col-lg-6">
+                    <table class="table table-sm table-borderless">
+                        <tr>
+                            <th style="width: 200px;">Multi-Container:</th>
+                            <td>{{ containers|length > 1 ? 'Yes (' ~ containers|length ~ ' containers)' : 'No' }}</td>
+                        </tr>
+                        <tr>
+                            <th>Multi-Stage:</th>
+                            <td>{{ containerStageConfigs|length > 0 ? 'Yes (stage1, stage2)' : 'No info' }}</td>
+                        </tr>
+                        <tr>
+                            <th>Package Type:</th>
+                            <td>{{ packageType|default('No info') }}</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+            {% endif %}
         </div>
     </div>
 
-    <div class="button-row">
+    {# Action Buttons #}
+    <div class="button-row mb-4">
         {%- if is_granted('ROLE_ADMIN') -%}
             {%- if not lockedProblem -%}
                 {{ button(path('jury_problem_edit', {'probId': problem.probid}), 'Edit', 'primary', 'edit') }}
                 {{ button(path('jury_problem_delete', {'probId': problem.probid}), 'Delete', 'danger', 'trash-alt', true) }}
             {% endif %}
-            {{ button(path('jury_problem_request_remaining', {'probId': problem.probid}), 'Judge remaining testcases', 'secondary', 'gavel') }}
+            {% if packagePath %}
+            <form method="POST" action="{{ path('jury_problem_send_to_judgehost', {'probId': problem.probid}) }}" style="display: inline;">
+                <input type="hidden" name="_token" value="{{ csrf_token('send_to_judgehost' ~ problem.probid) }}">
+                <button type="submit" class="btn btn-info" onclick="return confirm('Send this problem package to the external judgehost server?');">
+                    <i class="fas fa-paper-plane"></i> Send to Judgehost
+                </button>
+            </form>
+            {% else %}
+            <button type="button" class="btn btn-warning" disabled>
+                <i class="fas fa-exclamation-triangle"></i> No Package - Upload Required
+            </button>
+            {% endif %}
+            {# Resend button if image not built #}
+            {% if packagePath and customJudgehostData is empty %}
+            <form method="POST" action="{{ path('jury_problem_send_to_judgehost', {'probId': problem.probid}) }}" style="display: inline;">
+                <input type="hidden" name="_token" value="{{ csrf_token('send_to_judgehost' ~ problem.probid) }}">
+                <button type="submit" class="btn btn-warning" onclick="return confirm('Problem image not built on judgehost. Resend package?');">
+                    <i class="fas fa-redo"></i> Resend to Judgehost
+                </button>
+            </form>
+            {% endif %}
         {% endif %}
         {{ button(path('jury_export_problem', {'problemId': problem.probid}), 'Export', 'secondary', 'download') }}
-        {% include 'jury/partials/rejudge_form.html.twig' with {table: 'problem', id: problem.probid, buttonClass: 'btn-secondary'} %}
     </div>
 
-    <h3>Contests</h3>
-
-    {% if problem.contestProblems is empty %}
-        <p class="nodata">No contests defined</p>
+    {# Containers Section #}
+    <h3>Containers</h3>
+    {% if containers is empty %}
+        <p class="nodata">No container configuration available</p>
     {% else %}
-        <div class="row">
-            <div class="col-md-6">
-                <table
-                    class="data-table table table-hover table-striped table-sm">
-                    <thead class="thead-light">
-                    <tr>
-                        <th>CID</th>
-                        <th>Contest<br/>shortname</th>
-                        <th>Contest<br/>name</th>
-                        <th>Problem<br/>shortname</th>
-                        <th>Allow<br/>submit</th>
-                        <th>Allow<br/>judge</th>
-                        <th>Colour</th>
-                    </tr>
-                    </thead>
-                    <tbody>
-                    {% for contestProblem in problem.contestProblems %}
-                        {% set link = path('jury_contest', {'contestId': contestProblem.cid}) %}
-                        <tr>
-                            <td>
-                                <a href="{{ link }}">c{{ contestProblem.cid }}</a>
-                            </td>
-                            <td>
-                                <a href="{{ link }}">{{ contestProblem.contest.shortname }}</a>
-                            </td>
-                            <td>
-                                <a href="{{ link }}">{{ contestProblem.contest.name }}</a>
-                            </td>
-                            <td>
-                                <a href="{{ link }}">{{ contestProblem.shortname }}</a>
-                            </td>
-                            <td>
-                                {% include 'jury/partials/problem_toggle.html.twig' with {type: 'submit', enabled: contestProblem.allowSubmit} %}
-                            </td>
-                            <td>
-                                {% include 'jury/partials/problem_toggle.html.twig' with {type: 'judge', enabled: contestProblem.allowJudge} %}
-                            </td>
-                            {% if contestProblem.color is empty %}
-                                <td><a href="{{ link }}">&nbsp;</a></td>
-                            {% else %}
-                                <td title="{{ contestProblem.color }}">
-                                    <a href="{{ link }}">
-                                        {{ contestProblem | problemBadge }}
-                                    </a>
-                                </td>
+        <div class="accordion mb-4" id="containersAccordion">
+        {% for container in containers %}
+            <div class="card">
+                <div class="card-header" id="heading-{{ container.container_id }}">
+                    <h5 class="mb-0">
+                        <button class="btn btn-link" type="button" data-toggle="collapse" 
+                                data-target="#collapse-{{ container.container_id }}" 
+                                aria-expanded="false" aria-controls="collapse-{{ container.container_id }}">
+                            <i class="fas fa-docker text-primary"></i>
+                            <strong>{{ container.name ?? container.container_id }}</strong>
+                            {% if container.accepts_submission %}
+                                <span class="badge badge-success ml-2">Accepts Submission</span>
                             {% endif %}
-                        </tr>
-                    {% endfor %}
-                    </tbody>
-                </table>
+                        </button>
+                    </h5>
+                </div>
+                <div id="collapse-{{ container.container_id }}" class="collapse" 
+                     aria-labelledby="heading-{{ container.container_id }}" 
+                     data-parent="#containersAccordion">
+                    <div class="card-body">
+                        {# Basic Information #}
+                        <div class="mb-3">
+                            <h6 class="text-muted">Basic Information</h6>
+                            <table class="table table-sm table-bordered">
+                                <tr>
+                                    <th style="width: 200px;">Container ID</th>
+                                    <td><code>{{ container.container_id }}</code></td>
+                                </tr>
+                                <tr>
+                                    <th>Container Name</th>
+                                    <td>{{ container.name|default('No info') }}</td>
+                                </tr>
+                                {% if container.dockerfile_path %}
+                                <tr>
+                                    <th>Dockerfile Path</th>
+                                    <td><code>{{ container.dockerfile_path }}</code></td>
+                                </tr>
+                                {% endif %}
+                                <tr>
+                                    <th>Accepts Submission</th>
+                                    <td>
+                                        {% if container.accepts_submission %}
+                                            <span class="badge badge-success">Yes</span>
+                                        {% else %}
+                                            <span class="badge badge-secondary">No</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th>Image Status</th>
+                                    <td>
+                                        {% if customJudgehostData and customJudgehostData.containers is defined %}
+                                            <span class="badge badge-success"><i class="fas fa-check"></i> Built</span>
+                                        {% else %}
+                                            <span class="badge badge-warning"><i class="fas fa-exclamation-triangle"></i> Not Built</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            </table>
+                        </div>
+
+                        {# Container Parameters #}
+                        <div class="mb-3">
+                            <h6 class="text-muted">Container Parameters</h6>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <table class="table table-sm table-borderless">
+                                        <tr>
+                                            <th style="width: 150px;">Depends On:</th>
+                                            <td>
+                                                {% if container.depends_on is defined and container.depends_on is not empty %}
+                                                    {% for dep in container.depends_on %}
+                                                        <code>{{ dep.container_id }}</code>{% if not loop.last %}, {% endif %}
+                                                    {% endfor %}
+                                                {% else %}
+                                                    <span class="text-muted">None</span>
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <th>Terminates:</th>
+                                            <td>
+                                                {% if container.terminate_on_finish is defined and container.terminate_on_finish is not empty %}
+                                                    {% for term in container.terminate_on_finish %}
+                                                        <code>{{ term }}</code>{% if not loop.last %}, {% endif %}
+                                                    {% endfor %}
+                                                {% else %}
+                                                    <span class="text-muted">None</span>
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </div>
+                                <div class="col-md-6">
+                                    <table class="table table-sm table-borderless">
+                                        <tr>
+                                            <th style="width: 150px;">Exposed Ports:</th>
+                                            <td>
+                                                {% if container.ports is defined and container.ports is not empty %}
+                                                    {% for port in container.ports %}
+                                                        <span class="badge badge-secondary">{{ port }}</span>
+                                                    {% endfor %}
+                                                {% else %}
+                                                    <span class="text-muted">None</span>
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <th>Env Variables:</th>
+                                            <td>
+                                                {% if container.environment is defined and container.environment is not empty %}
+                                                    <span class="badge badge-info">{{ container.environment|length }} defined</span>
+                                                {% else %}
+                                                    <span class="text-muted">None</span>
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+
+                        {# Stage Configurations #}
+                        <div class="mb-3">
+                            <h6 class="text-muted">Stage Configurations & Resource Limits</h6>
+                            {% if containerStageConfigs[container.container_id] is defined and containerStageConfigs[container.container_id]|length > 0 %}
+                            <div class="row">
+                                {% for stageName, stageConfig in containerStageConfigs[container.container_id] %}
+                                <div class="col-md-6">
+                                    <div class="card mb-2 border-primary">
+                                        <div class="card-header bg-primary text-white">
+                                            <strong><i class="fas fa-layer-group"></i> {{ stageName|upper }}</strong>
+                                        </div>
+                                        <div class="card-body p-2">
+                                            <table class="table table-sm table-borderless mb-0">
+                                                {% if stageConfig.resource_limits is defined %}
+                                                <tr>
+                                                    <td colspan="2"><strong class="text-primary">Resource Limits:</strong></td>
+                                                </tr>
+                                                <tr>
+                                                    <td class="pl-3" style="width: 120px;">CPU:</td>
+                                                    <td>{{ stageConfig.resource_limits.cpu|default('No limit') }}</td>
+                                                </tr>
+                                                <tr>
+                                                    <td class="pl-3">Memory:</td>
+                                                    <td>{{ stageConfig.resource_limits.memory|default('No limit') }}</td>
+                                                </tr>
+                                                <tr>
+                                                    <td class="pl-3">Timeout:</td>
+                                                    <td>{{ stageConfig.resource_limits.timeout|default('No limit') }}{% if stageConfig.resource_limits.timeout is defined %}s{% endif %}</td>
+                                                </tr>
+                                                {% else %}
+                                                <tr>
+                                                    <td colspan="2"><span class="text-muted">No resource limits defined</span></td>
+                                                </tr>
+                                                {% endif %}
+                                                {% if stageConfig.network is defined %}
+                                                <tr>
+                                                    <td colspan="2"><strong class="text-primary">Network:</strong></td>
+                                                </tr>
+                                                <tr>
+                                                    <td class="pl-3">Enabled:</td>
+                                                    <td>
+                                                        {% if stageConfig.network.enabled %}
+                                                            <span class="badge badge-success">Yes</span>
+                                                        {% else %}
+                                                            <span class="badge badge-secondary">No</span>
+                                                        {% endif %}
+                                                    </td>
+                                                </tr>
+                                                {% endif %}
+                                                {% if stageConfig.environment is defined and stageConfig.environment is not empty %}
+                                                <tr>
+                                                    <td colspan="2"><strong class="text-primary">Stage Env Vars:</strong></td>
+                                                </tr>
+                                                <tr>
+                                                    <td colspan="2" class="pl-3">
+                                                        <span class="badge badge-info">{{ stageConfig.environment|length }} variables</span>
+                                                    </td>
+                                                </tr>
+                                                {% endif %}
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                            {% else %}
+                            <div class="alert alert-warning">
+                                <i class="fas fa-exclamation-triangle"></i> No stage configurations found. Please ensure stage1.config.json and stage2.config.json exist in the container directory.
+                            </div>
+                            {% endif %}
+                        </div>
+                        
+                        {# Hooks List #}
+                        {% if hooksInfo[container.container_id] is defined %}
+                        <div class="mb-3">
+                            <h6 class="text-muted">Hooks</h6>
+                            <table class="table table-sm table-bordered">
+                                <thead class="thead-light">
+                                    <tr>
+                                        <th style="width: 50%;">Hook Name</th>
+                                        <th style="width: 20%;">Type</th>
+                                        <th style="width: 30%;">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                {% for hookType, hookFiles in hooksInfo[container.container_id] %}
+                                    {% for hookFile in hookFiles %}
+                                    <tr>
+                                        <td><code>{{ hookFile }}</code></td>
+                                        <td>
+                                            {% if hookType == 'pre' %}
+                                                <span class="badge badge-info">Pre</span>
+                                            {% elseif hookType == 'post' %}
+                                                <span class="badge badge-success">Post</span>
+                                            {% elseif hookType == 'periodic' %}
+                                                <span class="badge badge-warning">Periodic</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <button class="btn btn-xs btn-outline-primary" disabled>
+                                                <i class="fas fa-edit"></i> Edit
+                                            </button>
+                                            <button class="btn btn-xs btn-outline-danger" disabled>
+                                                <i class="fas fa-trash"></i> Delete
+                                            </button>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                {% endfor %}
+                                </tbody>
+                            </table>
+                            <button class="btn btn-sm btn-outline-success" disabled>
+                                <i class="fas fa-plus"></i> Add Hook
+                            </button>
+                        </div>
+                        {% endif %}
+
+                        {# Data Files List #}
+                        {% if container.has_data is defined and container.has_data %}
+                        <div class="mb-3">
+                            <h6 class="text-muted">Data Files</h6>
+                            <div class="alert alert-info">
+                                <i class="fas fa-folder-open"></i> 
+                                Contains {{ container.data_files_count ?? 0 }} data files in <code>{{ container.container_id }}/data/</code>
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        {# Additional Details (collapsed by default) #}
+                        {% if container.depends_on is defined and container.depends_on is not empty 
+                           or container.environment is defined and container.environment is not empty 
+                           or container.health_check is defined %}
+                        <div class="mt-3">
+                            <button class="btn btn-sm btn-outline-secondary" type="button" data-toggle="collapse" 
+                                    data-target="#additional-{{ container.container_id }}" aria-expanded="false">
+                                <i class="fas fa-cog"></i> Additional Configuration
+                            </button>
+                            <div class="collapse mt-2" id="additional-{{ container.container_id }}">
+                                
+                                {% if container.depends_on is defined and container.depends_on is not empty %}
+                                <h6 class="text-muted mt-3">Dependencies</h6>
+                                <table class="table table-sm table-bordered">
+                                    <thead class="thead-light">
+                                        <tr>
+                                            <th>Container</th>
+                                            <th>Condition</th>
+                                            <th>Timeout</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                    {% for dep in container.depends_on %}
+                                        <tr>
+                                            <td><code>{{ dep.container_id }}</code></td>
+                                            <td><span class="badge badge-info">{{ dep.condition ?? 'started' }}</span></td>
+                                            <td>{{ dep.timeout ?? 'N/A' }}s</td>
+                                        </tr>
+                                    {% endfor %}
+                                    </tbody>
+                                </table>
+                                {% endif %}
+
+                                {% if container.environment is defined and container.environment is not empty %}
+                                <h6 class="text-muted mt-3">Environment Variables</h6>
+                                <table class="table table-sm table-bordered">
+                                    <thead class="thead-light">
+                                        <tr>
+                                            <th>Variable</th>
+                                            <th>Value</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                    {% for key, value in container.environment %}
+                                        <tr>
+                                            <td><code>{{ key }}</code></td>
+                                            <td><code>{{ value }}</code></td>
+                                        </tr>
+                                    {% endfor %}
+                                    </tbody>
+                                </table>
+                                {% endif %}
+
+                                {% if container.health_check is defined %}
+                                <h6 class="text-muted mt-3">Health Check</h6>
+                                <table class="table table-sm table-bordered">
+                                    <tr>
+                                        <th style="width: 200px;">Command</th>
+                                        <td><code>{{ container.health_check.command }}</code></td>
+                                    </tr>
+                                    <tr>
+                                        <th>Interval</th>
+                                        <td>{{ container.health_check.interval }}s</td>
+                                    </tr>
+                                    <tr>
+                                        <th>Timeout</th>
+                                        <td>{{ container.health_check.timeout }}s</td>
+                                    </tr>
+                                    <tr>
+                                        <th>Retries</th>
+                                        <td>{{ container.health_check.retries }}</td>
+                                    </tr>
+                                </table>
+                                {% endif %}
+                                
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
             </div>
+        {% endfor %}
         </div>
     {% endif %}
 
-    <h3>Attachments</h3>
-
-    <div class="row">
-        <div class="col-md-6">
-            {{ form_start(problemAttachmentForm) }}
-            <table class="table table-sm table-striped table-hover">
-                <thead class="thead-light">
-                <tr>
-                    <th>Name</th>
-                    <th>Mime type</th>
-                    <th></th>
-                </tr>
-                </thead>
-                <tbody>
-                {% if problem.attachments is empty %}
-                    <tr>
-                        <td colspan="2">
-                            <p class="nodata">No attachments</p>
-                        </td>
-                    </tr>
-                {% else %}
-                    {% for attachment in problem.attachments %}
-                        <tr>
-                            <td>{{ attachment.name }}</td>
-                            <td>{{ attachment.mimeType }}</td>
-                            <td>
-                                <a href="{{ path('jury_attachment_fetch', {'attachmentId': attachment.attachmentid}) }}"
-                                   class="btn btn-sm btn-primary">
-                                    <i class="fas fa-download"></i>
-                                </a>
-                                {% if is_granted('ROLE_ADMIN') and not lockedProblem %}
-                                    <a href="{{ path('jury_attachment_delete', {'attachmentId': attachment.attachmentid}) }}"
-                                       class="btn btn-sm btn-danger"
-                                       data-ajax-modal>
-                                        <i class="fas fa-trash-alt"></i>
-                                    </a>
-                                {% endif %}
-                            </td>
-                        </tr>
-                    {% endfor %}
-                {% endif %}
-
-                {% if is_granted('ROLE_ADMIN') and not lockedProblem %}
-                    <tr>
-                        <td colspan="2">
-                            {{ form_errors(problemAttachmentForm.content) }}
-                            {{ form_widget(problemAttachmentForm.content) }}
-                        </td>
-                        <td>
-                            {{ form_widget(problemAttachmentForm.add) }}
-                        </td>
-                    </tr>
-                {% endif %}
-                </tbody>
-            </table>
-            {{ form_end(problemAttachmentForm) }}
+    {# Package Directory Tree Section #}
+    {% if packageTree %}
+    <h3 class="mt-4">Package Directory Tree</h3>
+    <div class="card mb-4">
+        <div class="card-body">
+            <div class="package-tree">
+                {{ _self.render_tree(packageTree, 0) }}
+            </div>
         </div>
     </div>
+    {% endif %}
 
+    {# Rubrics Section #}
+    {% if rubrics is not empty %}
+    <h3 class="mt-4">Rubrics</h3>
+    <div class="table-responsive mb-4">
+        <table class="table table-sm table-striped">
+            <thead class="thead-light">
+                <tr>
+                    <th>ID</th>
+                    <th>Name</th>
+                    <th>Type</th>
+                    <th>Weight</th>
+                    <th>Threshold</th>
+                    <th>Description</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for rubric in rubrics %}
+                <tr>
+                    <td>{{ rubric.rubricid }}</td>
+                    <td>{{ rubric.name }}</td>
+                    <td><span class="badge badge-info">{{ rubric.type }}</span></td>
+                    <td>{{ rubric.weight }}</td>
+                    <td>{{ rubric.threshold ?? 'N/A' }}</td>
+                    <td>{{ rubric.description|default('') }}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    {# Attachments Section - Hidden for now #}
+    {% if false %}
+    <h3>Attachments</h3>
+    <div class="row">
+        <div class="col-md-6">
+            {% if problem.attachments is empty %}
+                <p class="nodata">No attachments</p>
+            {% else %}
+                <ul>
+                {% for attachment in problem.attachments %}
+                    <li>
+                        <a href="{{ path('jury_attachment_fetch', {'attachmentId': attachment.attachmentid}) }}">
+                            {{ attachment.name }}
+                        </a>
+                        <small class="text-muted">({{ attachment.mimeType }})</small>
+                    </li>
+                {% endfor %}
+                </ul>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    {# Submissions Section #}
     <h3>Submissions</h3>
-
     <div data-ajax-refresh-target>
         {%- include 'jury/partials/submission_list.html.twig' with {showTestcases: false} %}
     </div>

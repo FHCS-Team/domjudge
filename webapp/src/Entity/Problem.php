@@ -101,6 +101,62 @@ class Problem extends BaseApiEntity implements
     #[Serializer\Exclude]
     private ?string $problemstatement_type = null;
 
+    // Custom judgehost fields
+    #[ORM\Column(
+        options: [
+            'comment' => 'Whether this is a custom problem requiring custom judgehost',
+            'default' => 0,
+        ]
+    )]
+    #[Serializer\Exclude]
+    private bool $is_custom_problem = false;
+
+    #[ORM\Column(
+        type: 'json',
+        nullable: true,
+        options: ['comment' => 'Custom problem configuration from config.json']
+    )]
+    #[Serializer\Exclude]
+    private ?array $custom_config = null;
+
+    #[ORM\Column(
+        type: 'json',
+        nullable: true,
+        options: ['comment' => 'Data returned from custom judgehost registration']
+    )]
+    #[Serializer\Exclude]
+    private ?array $custom_judgehost_data = null;
+
+    #[ORM\Column(
+        nullable: true,
+        options: ['comment' => 'Project type for custom problems (database, nodejs-api, etc.)']
+    )]
+    #[Serializer\Exclude]
+    private ?string $project_type = null;
+
+    #[ORM\Column(
+        type: 'text',
+        nullable: true,
+        options: ['comment' => 'Path to the problem package file on the server']
+    )]
+    #[Serializer\Exclude]
+    private ?string $package_path = null;
+
+    #[ORM\Column(
+        nullable: true,
+        options: ['comment' => 'Package type: file, url, git']
+    )]
+    #[Serializer\Exclude]
+    private ?string $package_type = null;
+
+    #[ORM\Column(
+        type: 'text',
+        nullable: true,
+        options: ['comment' => 'Original package URL or git repository']
+    )]
+    #[Serializer\Exclude]
+    private ?string $package_source = null;
+
     // These types are encoded as bitset - if you add a new type, use the next power of 2.
     public const TYPE_PASS_FAIL = 1;
     public const TYPE_SCORING = 2;
@@ -691,5 +747,89 @@ class Problem extends BaseApiEntity implements
             }
         }
         return false;
+    }
+
+    // Custom judgehost getters and setters
+
+    public function setIsCustomProblem(bool $isCustomProblem): Problem
+    {
+        $this->is_custom_problem = $isCustomProblem;
+        return $this;
+    }
+
+    public function getIsCustomProblem(): bool
+    {
+        return $this->is_custom_problem;
+    }
+
+    public function isCustomProblem(): bool
+    {
+        return $this->is_custom_problem;
+    }
+
+    public function setCustomConfig(?array $customConfig): Problem
+    {
+        $this->custom_config = $customConfig;
+        return $this;
+    }
+
+    public function getCustomConfig(): ?array
+    {
+        return $this->custom_config;
+    }
+
+    public function setCustomJudgehostData(?array $customJudgehostData): Problem
+    {
+        $this->custom_judgehost_data = $customJudgehostData;
+        return $this;
+    }
+
+    public function getCustomJudgehostData(): ?array
+    {
+        return $this->custom_judgehost_data;
+    }
+
+    public function setProjectType(?string $projectType): Problem
+    {
+        $this->project_type = $projectType;
+        return $this;
+    }
+
+    public function getProjectType(): ?string
+    {
+        return $this->project_type;
+    }
+
+    public function setPackagePath(?string $packagePath): Problem
+    {
+        $this->package_path = $packagePath;
+        return $this;
+    }
+
+    public function getPackagePath(): ?string
+    {
+        return $this->package_path;
+    }
+
+    public function setPackageType(?string $packageType): Problem
+    {
+        $this->package_type = $packageType;
+        return $this;
+    }
+
+    public function getPackageType(): ?string
+    {
+        return $this->package_type;
+    }
+
+    public function setPackageSource(?string $packageSource): Problem
+    {
+        $this->package_source = $packageSource;
+        return $this;
+    }
+
+    public function getPackageSource(): ?string
+    {
+        return $this->package_source;
     }
 }

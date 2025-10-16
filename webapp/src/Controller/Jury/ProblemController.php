@@ -1128,6 +1128,104 @@ class ProblemController extends BaseController
         ]);
     }
 
+    #[IsGranted('ROLE_ADMIN')]
+    #[Route(path: '/add-package', name: 'jury_problem_add_package')]
+    public function addPackageAction(Request $request): Response
+    {
+        $form = $this->createForm(\App\Form\Type\CustomProblemPackageType::class);
+        
+        $form->handleRequest($request);
+        
+        $uploadStatus = null;
+        $uploadDetails = [];
+        $error = null;
+        
+        if ($form->isSubmitted() && $form->isValid()) {
+            $data = $form->getData();
+            /** @var UploadedFile $packageFile */
+            $packageFile = $data['package'];
+            
+            try {
+                // Import the problem using the existing ImportProblemService
+                $contest = $this->dj->getCurrentContest();
+                if ($contest === null) {
+                    throw new BadRequestHttpException('No active contest selected');
+                }
+                
+                // Open the ZIP file
+                $zip = $this->dj->openZipFile($packageFile->getRealPath());
+                $clientName = $packageFile->getClientOriginalName();
+                $messages = [];
+                
+                // Import the problem
+                $problem = $this->importProblemService->importZippedProblem(
+                    $zip,
+                    $clientName,
+                    null,
+                    $contest,
+                    $messages
+                );
+                
+                if ($problem === null) {
+                    throw new Exception('Failed to import problem package: ' . 
+                        implode(', ', $messages['danger'] ?? ['Unknown error']));
+                }
+                
+                // Apply overrides if provided
+                if (!empty($data['name'])) {
+                    $problem->setName($data['name']);
+                }
+                if (!empty($data['externalId'])) {
+                    $problem->setExternalid($data['externalId']);
+                }
+                if (!empty($data['timeLimit']) && is_numeric($data['timeLimit'])) {
+                    $problem->setTimelimit((float)$data['timeLimit']);
+                }
+                
+                $this->em->flush();
+                
+                $uploadStatus = 'success';
+                $uploadDetails = [
+                    'probid' => $problem->getProbid(),
+                    'name' => $problem->getName(),
+                    'externalId' => $problem->getExternalid(),
+                    'isCustomProblem' => $problem->isCustomProblem(),
+                    'projectType' => $problem->getProjectType(),
+                ];
+                
+                // Check if custom judgehost registration was successful
+                if ($problem->isCustomProblem()) {
+                    $customData = $problem->getCustomJudgehostData();
+                    if ($customData) {
+                        $uploadDetails['judgehostRegistered'] = true;
+                        $uploadDetails['customJudgehostResponse'] = $customData;
+                    } else {
+                        $uploadDetails['judgehostRegistered'] = false;
+                    }
+                }
+                
+                $this->addFlash('success', sprintf(
+                    'Problem "%s" (ID: %d) uploaded successfully. %s',
+                    $problem->getName(),
+                    $problem->getProbid(),
+                    $problem->isCustomProblem() ? 'Custom problem registered with judgehost.' : ''
+                ));
+                
+            } catch (Exception $e) {
+                $uploadStatus = 'error';
+                $error = $e->getMessage();
+                $this->addFlash('danger', 'Error uploading problem package: ' . $e->getMessage());
+            }
+        }
+        
+        return $this->render('jury/problem_add_package.html.twig', [
+            'form' => $form,
+            'uploadStatus' => $uploadStatus,
+            'uploadDetails' => $uploadDetails,
+            'error' => $error,
+        ]);
+    }
+
     /**
      * @param Testcase[] $testcases
      *
