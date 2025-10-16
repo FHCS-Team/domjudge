@@ -22,6 +22,7 @@ use App\Entity\Team;
 use App\Entity\TeamAffiliation;
 use App\Entity\TeamCategory;
 use App\Entity\Testcase;
+use App\Entity\SubmissionRubricScore;
 use App\Form\Type\SubmissionsFilterType;
 use App\Service\BalloonService;
 use App\Service\ConfigurationService;

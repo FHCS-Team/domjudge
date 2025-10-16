@@ -2,8 +2,7 @@
 
 {% block title %}Scoreboard {{ contest.shortname | default('') }} - {{ parent() }}{% endblock %}
 {% block content %}
-    {# Only access contest.externalid when contest is a non-null object #}
-    {% if contest is defined and contest %}
+    {% if contest is defined %}
         {% set contestId = contest.externalid %}
         {% if contestId %}
             {% set bannerImage = contestId | assetPath('contest') %}
@@ -16,9 +15,14 @@
         <img class="banner mt-2" src="{{ asset(bannerImage) }}" alt="Banner">
     {% endif %}
 
-    <div data-ajax-refresh-target data-ajax-refresh-after="initializeScoreboard" class="mt-3">
-        {% include 'partials/scoreboard.html.twig' with {jury: false, public: true} %}
-    </div>
+    {# If this contest is a hackathon with display data, show the hackathon landing to public guests #}
+    {% if contest is defined and contest and contest.hackathonEnabled and hackathonDisplayData is defined and hackathonDisplayData %}
+        {% include 'public/partials/hackathon_display.html.twig' %}
+    {% else %}
+        <div data-ajax-refresh-target data-ajax-refresh-after="initializeScoreboard" class="mt-3">
+            {% include 'partials/scoreboard.html.twig' with {jury: false, public: true} %}
+        </div>
+    {% endif %}
 
     <div data-submissions-modal>
         {% include 'public/team_submissions_modal.html.twig' %}

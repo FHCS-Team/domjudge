@@ -43,15 +43,6 @@
         {% set spd = singleProblemDisplay is defined ? singleProblemDisplay : null %}
         <div class="mb-4">
             <h2 class="h4">{{ singleProblem.name }}</h2>
-            {# Show banner first if available on the problem display data #}
-            {% if spd and spd.imageUrl %}
-                <div class="card mb-3">
-                    <div class="card-body text-center">
-                        <img src="{{ spd.imageUrl }}" alt="{{ singleProblem.name }}" style="max-width:100%; height:auto;">
-                    </div>
-                </div>
-            {% endif %}
-
             <div class="card mb-3">
                 <div class="card-body">
                     {# Show 'View full statement' only when a statement exists to avoid route errors #}
@@ -73,6 +64,15 @@
                     </div>
                 </div>
             </div>
+
+            {# Show banner only if available on the problem display data #}
+            {% if spd and spd.imageUrl %}
+                <div class="card mb-3">
+                    <div class="card-body text-center">
+                        <img src="{{ spd.imageUrl }}" alt="{{ singleProblem.name }}" style="max-width:100%; height:auto;">
+                    </div>
+                </div>
+            {% endif %}
 
             <div class="card p-3 mb-4">
                 <form action="{{ path('team_hackathon_submit') }}" method="post" enctype="multipart/form-data">

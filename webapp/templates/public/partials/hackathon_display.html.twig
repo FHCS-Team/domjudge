@@ -1,0 +1,50 @@
+{# Public Hackathon Display - simplified, no team-specific data #}
+<div class="hackathon-display public-display">
+    {% if hackathonDisplayData.bannerUrl %}
+        <div class="hackathon-banner mb-4" style="width:100%; max-height:300px; overflow:hidden; border-radius: 8px;">
+            <img src="{{ hackathonDisplayData.bannerUrl }}" alt="Hackathon Banner" style="width:100%; object-fit:cover; max-height:300px;">
+        </div>
+    {% endif %}
+
+    <div class="hackathon-header text-center mb-4">
+        {% if hackathonDisplayData.title %}
+            <h1 class="hackathon-title display-4 fw-bold text-primary">{{ hackathonDisplayData.title }}</h1>
+        {% else %}
+            <h1 class="hackathon-title display-4 fw-bold text-primary">{{ contest.name }}</h1>
+        {% endif %}
+
+        {% if hackathonDisplayData.subtitle %}
+            <h2 class="hackathon-subtitle h4 text-muted mb-3">{{ hackathonDisplayData.subtitle }}</h2>
+        {% endif %}
+    </div>
+
+    {% if hackathonDisplayData.description %}
+        <div class="hackathon-description mb-4">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">About this contest</h5>
+                    <div class="card-text">
+                        {{ hackathonDisplayData.description|raw }}
+                    </div>
+                </div>
+            </div>
+        </div>
+    {% endif %}
+
+    <div class="hackathon-actions mb-4">
+        <div class="row justify-content-center">
+            <div class="col-md-4 mb-3 text-center">
+                <a href="{{ path('public_problems') }}" class="btn btn-outline-primary btn-lg">View Problems</a>
+            </div>
+            <div class="col-md-4 mb-3 text-center">
+                <a href="{{ path('public_index') }}" class="btn btn-outline-warning btn-lg">View Scoreboard</a>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<style>
+.public-display .hackathon-banner img { max-height: 280px; }
+.public-display .hackathon-actions .btn { width: 100%; }
+</style>
