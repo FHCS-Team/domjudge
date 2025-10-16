@@ -81,6 +81,23 @@ class MiscController extends BaseController
                     ->findOneBy(['contest' => $contest]);
             }
             $data['hackathonDisplayData'] = $hackathonDisplayData;
+            // If hackathon and contest has exactly one problem, provide it to the template
+            $singleProblem = null;
+            if ($contest->getHackathonEnabled()) {
+                $problems = $contest->getProblems();
+                if ($problems->count() === 1) {
+                    $singleProblem = $problems->first()->getProblem();
+                }
+            }
+            $data['singleProblem'] = $singleProblem;
+            // Also provide ProblemDisplayData for the single problem so templates
+            // can render banners and descriptions even when no statement is set.
+            $singleProblemDisplay = null;
+            if ($singleProblem) {
+                $singleProblemDisplay = $this->em->getRepository(\App\Entity\ProblemDisplayData::class)
+                    ->findOneBy(['problem' => $singleProblem]);
+            }
+            $data['singleProblemDisplay'] = $singleProblemDisplay;
             
             $scoreboard = $this->scoreboardService
                 ->getTeamScoreboard($contest, $teamId, false);

@@ -85,7 +85,7 @@ class ProblemRubricController extends AbstractController
         }
         $attachment = new ProblemAttachment();
         $attachment->setProblem($problem);
-        $form = $this->createForm(ProblemAttachmentType::class, $attachment);
+    $form = $this->createForm(ProblemAttachmentType::class, $attachment, ['problem' => $problem]);
         $form->handleRequest($request);
         if ($form->isSubmitted()) {
             $customType = $form->get('type_custom')->getData();
@@ -150,7 +150,7 @@ class ProblemRubricController extends AbstractController
         $attachment = new ProblemAttachment();
         $attachment->setProblem($problem);
         $attachment->setRubric($rubric);
-        $form = $this->createForm(ProblemAttachmentType::class, $attachment);
+    $form = $this->createForm(ProblemAttachmentType::class, $attachment, ['problem' => $problem]);
         $form->handleRequest($request);
         if ($form->isSubmitted()) {
             $customType = $form->get('type_custom')->getData();
@@ -215,7 +215,7 @@ class ProblemRubricController extends AbstractController
         $attachment = new ProblemAttachment();
         $attachment->setProblem($problem);
         $attachment->setRubric($rubric);
-        $form = $this->createForm(ProblemAttachmentType::class, $attachment);
+    $form = $this->createForm(ProblemAttachmentType::class, $attachment, ['problem' => $problem]);
         $form->handleRequest($request);
 
         if ($form->isSubmitted()) {

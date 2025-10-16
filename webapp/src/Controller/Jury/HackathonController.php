@@ -511,8 +511,53 @@ class HackathonController extends BaseController
             $displayData->setProblem($problem);
         }
 
-        $form = $this->createForm(\App\Form\Type\ProblemDisplayDataType::class, $displayData);
+        // Debug: log what we loaded for troubleshooting blank form fields
+        try {
+            $msg = sprintf('Loaded ProblemDisplayData for problem %d: displayName="%s", descriptionLen=%d, imageUrl="%s"',
+                $problem->getProbid(),
+                (string)$displayData->getDisplayName(),
+                (int)strlen((string)$displayData->getDescription()),
+                (string)$displayData->getImageUrl()
+            );
+            $this->addFlash('info', $msg);
+            @error_log('[HackathonController] ' . $msg);
+        } catch (\Throwable $e) {
+            // swallow debug errors
+        }
+
+        $form = $this->createForm(\App\Form\Type\ProblemDisplayDataType::class, $displayData, [
+            // The template adds some helper inputs (e.g. attachmentContentTypeOther,
+            // attachmentScopeOther) which are not declared on the Symfony form. Allow
+            // extra fields so these do not cause the form to be rejected.
+            'allow_extra_fields' => true,
+        ]);
         $form->handleRequest($request);
+
+        // Debug: if form was submitted but not saved, surface validation errors and submitted values
+        if ($form->isSubmitted()) {
+            try {
+                $valid = $form->isValid() ? 'yes' : 'no';
+                $submittedMsg = sprintf('ProblemDisplayData form submitted for problem %d; valid=%s', $problem->getProbid(), $valid);
+                $this->addFlash('info', $submittedMsg);
+                @error_log('[HackathonController] ' . $submittedMsg);
+
+                // Show submitted values for key fields
+                $dn = $form->has('displayName') ? (string)$form->get('displayName')->getData() : '';
+                $iv = $form->has('imageUrl') ? (string)$form->get('imageUrl')->getData() : '';
+                $desc = $form->has('description') ? (int)strlen((string)$form->get('description')->getData()) : 0;
+                $this->addFlash('info', 'Submitted values: displayName=[' . $dn . '], imageUrl=[' . $iv . '], descriptionLen=' . $desc);
+                @error_log('[HackathonController] Submitted values: displayName=' . $dn . ', imageUrl=' . $iv . ', descriptionLen=' . $desc);
+
+                if (!$form->isValid()) {
+                    foreach ($form->getErrors(true) as $err) {
+                        $this->addFlash('danger', 'Form error: ' . $err->getMessage());
+                        @error_log('[HackathonController] Form error: ' . $err->getMessage());
+                    }
+                }
+            } catch (\Throwable $e) {
+                // swallow
+            }
+        }
 
         // Inline Rubric add form
         $rubric = new \App\Entity\Rubric();
@@ -588,8 +633,23 @@ class HackathonController extends BaseController
                         }
                     }
                     
-                    $safeName = 'banner_' . $problem->getProbid() . '_' . uniqid() . '.' . $bannerFile->guessExtension();
+                    // Determine a safe extension. guessExtension() may return null if
+                    // the mime type guesser (fileinfo) isn't available, so fall back
+                    // to client-provided extension or the original filename.
+                    $ext = $bannerFile->guessExtension();
+                    if (!$ext) {
+                        $ext = $bannerFile->getClientOriginalExtension();
+                    }
+                    if (!$ext) {
+                        $ext = pathinfo($bannerFile->getClientOriginalName(), PATHINFO_EXTENSION) ?: 'bin';
+                    }
+
+                    $safeName = sprintf('banner_%s_%s.%s', $problem->getProbid(), uniqid(), $ext);
                     $bannerFile->move($uploadsDir, $safeName);
+
+                    // Ensure the file is readable by the webserver
+                    @chmod($uploadsDir . '/' . $safeName, 0644);
+
                     $newBannerUrl = '/uploads/problem_banners/' . $safeName;
                     $displayData->setImageUrl($newBannerUrl);
                     $this->addFlash('success', 'Banner uploaded successfully: ' . $newBannerUrl);

@@ -38,41 +38,84 @@
         </div>
     {% endif %}
 
-    {# Quick Actions Section #}
+    {# If there is a single problem, show its full statement and a compact submit form #}
+    {% if singleProblem is defined and singleProblem %}
+        {% set spd = singleProblemDisplay is defined ? singleProblemDisplay : null %}
+        <div class="mb-4">
+            <h2 class="h4">{{ singleProblem.name }}</h2>
+            {# Show banner first if available on the problem display data #}
+            {% if spd and spd.imageUrl %}
+                <div class="card mb-3">
+                    <div class="card-body text-center">
+                        <img src="{{ spd.imageUrl }}" alt="{{ singleProblem.name }}" style="max-width:100%; height:auto;">
+                    </div>
+                </div>
+            {% endif %}
+
+            <div class="card mb-3">
+                <div class="card-body">
+                    {# Show 'View full statement' only when a statement exists to avoid route errors #}
+                    {% if singleProblem.getProblemstatement() or singleProblem.getProblemstatementType() %}
+                        <a href="{{ path('team_problem_statement', {probId: singleProblem.probid}) }}" class="btn btn-link">View full statement</a>
+                    {% endif %}
+                    <div class="mt-2">
+                        {# Prefer problem display data description (rich HTML). Otherwise fall back to the inline problem statement if available. #}
+                        {% if spd and spd.description %}
+                            <div class="problem-statement">{{ spd.description|raw }}</div>
+                        {% else %}
+                            {% set stmt = singleProblem.getProblemstatement() %}
+                            {% if stmt %}
+                                <div class="problem-statement">{{ stmt|raw }}</div>
+                            {% else %}
+                                <p class="text-muted">No inline statement available.</p>
+                            {% endif %}
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="card p-3 mb-4">
+                <form action="{{ path('team_hackathon_submit') }}" method="post" enctype="multipart/form-data">
+                    <input type="hidden" name="problem_id" value="{{ singleProblem.probid }}">
+                    <div class="mb-2">
+                        <label for="submission_file" class="form-label">Submission file</label>
+                        <input id="submission_file" name="submission_file" type="file" class="form-control" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Submit</button>
+                </form>
+            </div>
+        </div>
+    {% else %}
+    {# Quick Actions Section (simplified) #}
     <div class="hackathon-actions mb-4">
         <div class="row">
             <div class="col-md-4 mb-3">
                 <div class="card h-100">
                     <div class="card-body text-center">
-                        <i class="fas fa-code fa-3x text-primary mb-3"></i>
                         <h5 class="card-title">Problems</h5>
-                        <p class="card-text">View and solve contest problems</p>
-                        <a href="{{ path('team_problems') }}" class="btn btn-primary">View Problems</a>
+                        <a href="{{ path('team_problems') }}" class="btn btn-outline-primary">View Problems</a>
                     </div>
                 </div>
             </div>
             <div class="col-md-4 mb-3">
                 <div class="card h-100">
                     <div class="card-body text-center">
-                        <i class="fas fa-upload fa-3x text-success mb-3"></i>
                         <h5 class="card-title">Submit Solution</h5>
-                        <p class="card-text">Submit your solution to problems</p>
-                        <a href="{{ path('team_submit') }}" class="btn btn-success">Submit</a>
+                        <a href="{{ path('team_submit') }}" class="btn btn-outline-success">Submit</a>
                     </div>
                 </div>
             </div>
             <div class="col-md-4 mb-3">
                 <div class="card h-100">
                     <div class="card-body text-center">
-                        <i class="fas fa-trophy fa-3x text-warning mb-3"></i>
                         <h5 class="card-title">Scoreboard</h5>
-                        <p class="card-text">Check your ranking and progress</p>
-                        <a href="{{ path('team_scoreboard') }}" class="btn btn-warning">View Scoreboard</a>
+                        <a href="{{ path('team_scoreboard') }}" class="btn btn-outline-warning">View Scoreboard</a>
                     </div>
                 </div>
             </div>
         </div>
     </div>
+    {% endif %}
 
     {# Team Summary Section (Compact) #}
     <div class="team-summary">

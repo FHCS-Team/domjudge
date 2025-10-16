@@ -70,7 +70,7 @@ class SubmissionController extends BaseController
         
         $form = $this->formFactory
             ->createBuilder($formType, $data)
-            ->setAction($this->generateUrl('team_submit'))
+            ->setAction($this->generateUrl($isHackathon ? 'team_hackathon_submit' : 'team_submit'))
             ->getForm();
 
         $form->handleRequest($request);

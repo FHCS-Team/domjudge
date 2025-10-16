@@ -5,6 +5,7 @@ namespace App\Form\Type;
 
 use App\Entity\ProblemAttachment;
 use App\Entity\Rubric;
+use App\Entity\Problem;
 use Symfony\Bridge\Doctrine\Form\Type\EntityType;
 use Symfony\Component\Form\AbstractType;
 use Symfony\Component\Form\Extension\Core\Type\TextType;
@@ -74,6 +75,15 @@ class ProblemAttachmentType extends AbstractType
                 'placeholder' => 'None',
                 'help' => 'Manage rubrics <a href="/jury/problem-rubrics" target="_blank">here</a>.',
                 'help_html' => true,
+                // If a Problem is provided in options, restrict rubrics to that problem
+                'query_builder' => function ($rr) use ($options) {
+                    $qb = $rr->createQueryBuilder('r')->orderBy('r.name', 'ASC');
+                    if (!empty($options['problem']) && $options['problem'] instanceof Problem) {
+                        $qb->andWhere('r.problem = :prob')
+                           ->setParameter('prob', $options['problem']);
+                    }
+                    return $qb;
+                },
             ])
             ->add('content', FileType::class, [
                 'label' => 'Attachment File',
@@ -92,6 +102,7 @@ class ProblemAttachmentType extends AbstractType
     {
         $resolver->setDefaults([
             'data_class' => ProblemAttachment::class,
+            'problem' => null,
         ]);
     }
 }

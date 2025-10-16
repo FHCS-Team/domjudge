@@ -451,7 +451,7 @@ class ProblemController extends BaseController
             }
         }
 
-        $problemAttachmentForm = $this->createForm(ProblemAttachmentType::class);
+    $problemAttachmentForm = $this->createForm(ProblemAttachmentType::class, null, ['problem' => $problem]);
         $problemAttachmentForm->handleRequest($request);
         if ($this->isGranted('ROLE_ADMIN') && $problemAttachmentForm->isSubmitted() && $problemAttachmentForm->isValid() && !$lockedProblem) {
             /** @var UploadedFile $file */
